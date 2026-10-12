@@ -1,0 +1,63 @@
+import React, { useState } from 'react';
+import { useAuth } from './context/AuthContext';
+import { useStore } from './context/StoreContext';
+import { useLanguage } from './context/LanguageContext';
+import { AuthView } from './components/AuthView';
+import { Header } from './components/Header';
+import { BottomNav, NavTab } from './components/BottomNav';
+import { DashboardView } from './components/DashboardView';
+import { StockView } from './components/StockView';
+import { SaleEntryView } from './components/SaleEntryView';
+import { SalesHistoryView } from './components/SalesHistoryView';
+import { CreditDuesView } from './components/CreditDuesView';
+
+export default function App() {
+  const { user, loading } = useAuth();
+  const { lowStockProducts, customerDues } = useStore();
+  const { language } = useLanguage();
+  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white p-4">
+        <div className="w-12 h-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin mb-4" />
+        <p className="text-sm font-semibold tracking-wide text-blue-200">
+          {language === 'bn' ? 'আমার বিজনেস ম্যানেজার লোড হচ্ছে...' : 'Amar Business Manager is loading...'}
+        </p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthView />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col antialiased">
+      {/* Top Mobile Sticky Header */}
+      <Header />
+
+      {/* Main Content Area: Centered container up to 600px */}
+      <main className="flex-1 w-full max-w-[600px] mx-auto px-3.5 pt-4 pb-24">
+        {currentTab === 'dashboard' && <DashboardView onNavigate={(t) => setCurrentTab(t)} />}
+        {currentTab === 'stock' && <StockView />}
+        {currentTab === 'sale' && (
+          <SaleEntryView onSuccessNavigate={() => setCurrentTab('history')} />
+        )}
+        {currentTab === 'history' && <SalesHistoryView />}
+        {currentTab === 'dues' && <CreditDuesView />}
+      </main>
+
+      {/* Fixed Bottom Navigation */}
+      <BottomNav
+        currentTab={currentTab}
+        onSelectTab={(tab) => {
+          setCurrentTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        lowStockCount={lowStockProducts.length}
+        duesCount={customerDues.length}
+      />
+    </div>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "আমার বিজনেস ম্যানেজার",
+  "description": "ক্ষুদ্র ব্যবসার পণ্য স্টক, নগদ ও বাকি বিক্রি এবং লাভের হিসাব পরিচালনার বাংলা ওয়েব অ্যাপ।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
