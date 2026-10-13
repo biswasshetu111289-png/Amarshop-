@@ -67,6 +67,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { PWAInstallBanner } from './PWAInstallBanner';
 
 export const Header: React.FC = () => {
   const { user, logout, requestPasswordReset } = useAuth();
@@ -670,6 +671,9 @@ export const Header: React.FC = () => {
               <Globe className="w-3.5 h-3.5 text-yellow-300" />
               <span>{language === 'bn' ? 'English' : 'বাংলা'}</span>
             </button>
+
+            {/* PWA Mobile Install Button */}
+            <PWAInstallBanner variant="header-btn" />
 
             {isAdmin && (
               <button
@@ -1316,6 +1320,9 @@ export const Header: React.FC = () => {
                   <span className="font-bold text-indigo-700">{currentShop?.inviteCode || 'N/A'}</span>
                 </div>
               </div>
+
+              {/* Install PWA Prompt */}
+              <PWAInstallBanner variant="compact" />
 
               {/* Shop Profile & Name/Logo Edit Card */}
               {currentShop && (

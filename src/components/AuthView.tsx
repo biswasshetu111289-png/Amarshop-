@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { PWAInstallBanner } from './PWAInstallBanner';
 
 export const AuthView: React.FC = () => {
   const { login, register, loginWithGoogle, loginAsDemo, requestPasswordReset } = useAuth();
@@ -317,6 +318,11 @@ export const AuthView: React.FC = () => {
           <Sparkles className="w-4 h-4 text-indigo-600" />
           <span>১-ক্লিকে ডেমো স্টোর লগইন</span>
         </button>
+
+        {/* PWA Home Screen Install for mobile access */}
+        <div className="pt-1">
+          <PWAInstallBanner variant="compact" />
+        </div>
       </div>
 
       {/* Security notice & data persistence reassurance */}

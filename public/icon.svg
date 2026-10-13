@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+    <linearGradient id="roofGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fbbf24" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0f172a" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Inner subtle border glow -->
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="4" />
+
+  <!-- Main Storefront Illustration -->
+  <g filter="url(#shadow)" transform="translate(64, 76)">
+    <!-- Awning / Roof -->
+    <path d="M24 104 L192 36 L360 104 L376 136 L8 136 Z" fill="url(#roofGrad)" />
+    <!-- Awning stripes -->
+    <path d="M52 93 L68 136 L108 136 L92 78 Z" fill="#ffffff" fill-opacity="0.25" />
+    <path d="M140 56 L148 136 L188 136 L180 40 Z" fill="#ffffff" fill-opacity="0.25" />
+    <path d="M228 50 L236 136 L276 136 L268 64 Z" fill="#ffffff" fill-opacity="0.25" />
+    <path d="M308 83 L316 136 L356 136 L340 96 Z" fill="#ffffff" fill-opacity="0.25" />
+
+    <!-- Awning scallops -->
+    <ellipse cx="38" cy="136" rx="30" ry="14" fill="url(#roofGrad)" />
+    <ellipse cx="98" cy="136" rx="30" ry="14" fill="#fbbf24" />
+    <ellipse cx="158" cy="136" rx="30" ry="14" fill="url(#roofGrad)" />
+    <ellipse cx="226" cy="136" rx="30" ry="14" fill="#fbbf24" />
+    <ellipse cx="286" cy="136" rx="30" ry="14" fill="url(#roofGrad)" />
+    <ellipse cx="346" cy="136" rx="30" ry="14" fill="#fbbf24" />
+
+    <!-- Shop Building Walls -->
+    <rect x="36" y="146" width="312" height="184" rx="16" fill="#ffffff" />
+
+    <!-- Door -->
+    <rect x="156" y="210" width="72" height="120" rx="8" fill="#1e293b" />
+    <circle cx="216" cy="270" r="4" fill="#fbbf24" />
+
+    <!-- Window Left with items -->
+    <rect x="64" y="174" width="72" height="76" rx="8" fill="#e0e7ff" />
+    <path d="M64 212 L136 212" stroke="#cbd5e1" stroke-width="3" />
+    <path d="M100 174 L100 250" stroke="#cbd5e1" stroke-width="3" />
+
+    <!-- Window Right with growth chart -->
+    <rect x="248" y="174" width="72" height="76" rx="8" fill="#eff6ff" />
+    <polyline points="256,236 272,216 288,224 308,188" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="308" cy="188" r="4" fill="#10b981" />
+
+    <!-- Base floor -->
+    <rect x="16" y="324" width="352" height="16" rx="8" fill="#94a3b8" />
+  </g>
+</svg>

@@ -10,6 +10,8 @@ import { StockView } from './components/StockView';
 import { SaleEntryView } from './components/SaleEntryView';
 import { SalesHistoryView } from './components/SalesHistoryView';
 import { CreditDuesView } from './components/CreditDuesView';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -39,6 +41,7 @@ export default function App() {
 
       {/* Main Content Area: Centered container up to 600px */}
       <main className="flex-1 w-full max-w-[600px] mx-auto px-3.5 pt-4 pb-24">
+        <PWAInstallBanner variant="banner" />
         {currentTab === 'dashboard' && <DashboardView onNavigate={(t) => setCurrentTab(t)} />}
         {currentTab === 'stock' && <StockView />}
         {currentTab === 'sale' && (
@@ -47,6 +50,9 @@ export default function App() {
         {currentTab === 'history' && <SalesHistoryView />}
         {currentTab === 'dues' && <CreditDuesView />}
       </main>
+
+      {/* Offline Connectivity Notification */}
+      <OfflineIndicator />
 
       {/* Fixed Bottom Navigation */}
       <BottomNav
