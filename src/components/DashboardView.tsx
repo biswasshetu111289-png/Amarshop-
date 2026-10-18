@@ -12,11 +12,16 @@ import {
   ArrowRight,
   ShieldAlert,
   Store,
+  Receipt,
+  Building2,
+  Users,
+  Coins,
 } from 'lucide-react';
 import { NavTab } from './BottomNav';
+import { DuesSubTab } from './CreditDuesView';
 
 interface DashboardViewProps {
-  onNavigate: (tab: NavTab) => void;
+  onNavigate: (tab: NavTab, subTab?: DuesSubTab) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
@@ -28,6 +33,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     todaySalesAmount,
     totalDuesAmount,
     totalProfitAmount,
+    grossProfitAmount,
+    netProfitAmount,
+    totalExpensesAmount,
+    totalSupplierDuesAmount,
+    totalCommittedCapital,
+    totalPaidCapital,
+    totalCapitalDue,
+    partners,
+    supplierDues,
     lowStockProducts,
     sales,
   } = useStore();
@@ -171,26 +185,118 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Card 4: Total Profit */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm">
+        {/* Card 4: Actual Net Profit (একচুয়াল নিট লাভ) */}
+        <div
+          onClick={() => onNavigate('dues', 'expenses')}
+          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-500">
-              {language === 'bn' ? 'মোট লাভ' : 'Total Profit'}
+              {language === 'bn' ? 'একচুয়াল নিট লাভ' : 'Actual Net Profit'}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2">
             <div
               className={`text-xl font-bold ${
-                totalProfitAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                netProfitAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'
               }`}
             >
-              {formatCurrency(totalProfitAmount, language)}
+              {formatCurrency(netProfitAmount, language)}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              {language === 'bn' ? 'বিক্রি ও প্যাকেজিং সমন্বিত নিট লাভ' : 'Net profit after packaging cost'}
+            <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+              {totalExpensesAmount > 0
+                ? language === 'bn'
+                  ? `খরচ বাদ দিয়ে আসল লাভ`
+                  : `After costs`
+                : language === 'bn'
+                ? 'বিক্রি ও খরচ সমন্বিত লাভ'
+                : 'Revenue minus costs'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Accounting & Financial Health Hub (খরচ, পাইকার দেনা ও পার্টনারশিপ) */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+              <Coins className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                {language === 'bn' ? 'হিসাব খাতা ও আর্থিক স্বাস্থ্য' : 'Accounts & Financial Hub'}
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                {language === 'bn'
+                  ? 'দৈনন্দিন খরচ, পাইকার দেনা ও পার্টনারদের মূলধন'
+                  : 'Daily costs, wholesaler debt & partner capital'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate('dues', 'customer')}
+            className="text-xs text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1"
+          >
+            <span>{language === 'bn' ? 'সব খাতা' : 'All Accounts'}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          {/* Hub Item 1: Expenses */}
+          <div
+            onClick={() => onNavigate('dues', 'expenses')}
+            className="p-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 border border-slate-200/60 hover:border-rose-200 transition cursor-pointer text-center group"
+          >
+            <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center mx-auto group-hover:scale-105 transition">
+              <Receipt className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-[10px] font-medium text-slate-500 mt-1.5">
+              {language === 'bn' ? 'দোকানের খরচ' : 'Expenses'}
+            </div>
+            <div className="text-xs font-bold text-rose-600 mt-0.5">
+              {formatCurrency(totalExpensesAmount, language)}
+            </div>
+          </div>
+
+          {/* Hub Item 2: Supplier Dues (পাইকার পাবে) */}
+          <div
+            onClick={() => onNavigate('dues', 'supplier')}
+            className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 border border-slate-200/60 hover:border-amber-200 transition cursor-pointer text-center group"
+          >
+            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mx-auto group-hover:scale-105 transition">
+              <Building2 className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-[10px] font-medium text-slate-500 mt-1.5">
+              {language === 'bn' ? 'পাইকার পাবে' : 'Supplier Due'}
+            </div>
+            <div className="text-xs font-bold text-amber-700 mt-0.5">
+              {formatCurrency(totalSupplierDuesAmount, language)}
+            </div>
+          </div>
+
+          {/* Hub Item 3: Partnership & Capital */}
+          <div
+            onClick={() => onNavigate('dues', 'partnership')}
+            className="p-2.5 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200/60 hover:border-indigo-200 transition cursor-pointer text-center group"
+          >
+            <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center mx-auto group-hover:scale-105 transition">
+              <Users className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-[10px] font-medium text-slate-500 mt-1.5">
+              {language === 'bn' ? 'পার্টনারশিপ' : 'Partners'}
+            </div>
+            <div className="text-xs font-bold text-indigo-700 mt-0.5">
+              {totalCapitalDue > 0 ? (
+                <span className="text-rose-600">বাকি ৳{formatNumber(totalCapitalDue, language)}</span>
+              ) : (
+                <span>{formatCurrency(totalPaidCapital, language)}</span>
+              )}
             </div>
           </div>
         </div>

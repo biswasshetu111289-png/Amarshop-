@@ -13,7 +13,19 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Product, Sale, Shop, ShopRole, ShopMember, ShopJoinRequest } from '../types';
+import {
+  Product,
+  Sale,
+  Shop,
+  ShopRole,
+  ShopMember,
+  ShopJoinRequest,
+  Expense,
+  PartnerInvestor,
+  SupplierDue,
+  CapitalContribution,
+  SupplierPayment,
+} from '../types';
 
 // Collection references
 export const getShopsCollection = () => collection(db, 'shops');
@@ -30,6 +42,27 @@ export const getSalesCollection = (targetId: string) => {
     return collection(db, 'users', targetId, 'sales');
   }
   return collection(db, 'shops', targetId, 'sales');
+};
+
+export const getExpensesCollection = (targetId: string) => {
+  if (targetId.startsWith('usr_') || targetId === 'demo_store_owner') {
+    return collection(db, 'users', targetId, 'expenses');
+  }
+  return collection(db, 'shops', targetId, 'expenses');
+};
+
+export const getPartnersCollection = (targetId: string) => {
+  if (targetId.startsWith('usr_') || targetId === 'demo_store_owner') {
+    return collection(db, 'users', targetId, 'partners');
+  }
+  return collection(db, 'shops', targetId, 'partners');
+};
+
+export const getSupplierDuesCollection = (targetId: string) => {
+  if (targetId.startsWith('usr_') || targetId === 'demo_store_owner') {
+    return collection(db, 'users', targetId, 'supplier_dues');
+  }
+  return collection(db, 'shops', targetId, 'supplier_dues');
 };
 
 /**
@@ -1160,4 +1193,326 @@ export async function clearAllProducts(targetId: string): Promise<number> {
   });
   await batch.commit();
   return snap.size;
+}
+
+// ============================================================================
+// EXPENSES (দৈনন্দিন খরচ খাতা)
+// ============================================================================
+
+/**
+ * Add a new business expense
+ */
+export async function addExpense(
+  targetId: string,
+  expense: Omit<Expense, 'id' | 'createdAt'>
+): Promise<string> {
+  const colRef = getExpensesCollection(targetId);
+  const docRef = doc(colRef);
+  await setDoc(docRef, {
+    ...expense,
+    amount: Number(expense.amount) || 0,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+/**
+ * Update an existing expense
+ */
+export async function updateExpense(
+  targetId: string,
+  expenseId: string,
+  data: Partial<Expense>
+): Promise<void> {
+  const colRef = getExpensesCollection(targetId);
+  const docRef = doc(colRef, expenseId);
+  const updatePayload: Record<string, any> = { ...data };
+  if (data.amount !== undefined) {
+    updatePayload.amount = Number(data.amount) || 0;
+  }
+  await updateDoc(docRef, updatePayload);
+}
+
+/**
+ * Delete an expense
+ */
+export async function deleteExpense(targetId: string, expenseId: string): Promise<void> {
+  const colRef = getExpensesCollection(targetId);
+  await deleteDoc(doc(colRef, expenseId));
+}
+
+// ============================================================================
+// PARTNERS & INVESTORS (অংশীদার ও ইনভেস্টর হিসাব)
+// ============================================================================
+
+/**
+ * Add a new partner or investor
+ */
+export async function addPartnerInvestor(
+  targetId: string,
+  partner: Omit<PartnerInvestor, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  const colRef = getPartnersCollection(targetId);
+  const docRef = doc(colRef);
+  const committed = Number(partner.committedAmount) || 0;
+  const paid = Number(partner.paidAmount) || 0;
+  const due = Math.max(0, committed - paid);
+
+  const initialContributions: CapitalContribution[] =
+    partner.contributions && partner.contributions.length > 0
+      ? partner.contributions
+      : paid > 0
+      ? [
+          {
+            id: `contrib_${Date.now()}`,
+            date: new Date().toISOString().split('T')[0],
+            amount: paid,
+            notes: 'প্রারম্ভিক মূলধন জমা',
+          },
+        ]
+      : [];
+
+  await setDoc(docRef, {
+    name: partner.name,
+    phone: partner.phone || '',
+    role: partner.role || 'partner',
+    committedAmount: committed,
+    paidAmount: paid,
+    dueAmount: due,
+    profitShareRatio: Number(partner.profitShareRatio) || 0,
+    contributions: initialContributions,
+    notes: partner.notes || '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  return docRef.id;
+}
+
+/**
+ * Update a partner or investor details
+ */
+export async function updatePartnerInvestor(
+  targetId: string,
+  partnerId: string,
+  data: Partial<PartnerInvestor>
+): Promise<void> {
+  const colRef = getPartnersCollection(targetId);
+  const docRef = doc(colRef, partnerId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) throw new Error('পার্টনার তথ্য পাওয়া যায়নি');
+
+  const existing = docSnap.data() as PartnerInvestor;
+  const committed = data.committedAmount !== undefined ? Number(data.committedAmount) : existing.committedAmount;
+  const paid = data.paidAmount !== undefined ? Number(data.paidAmount) : existing.paidAmount;
+  const due = Math.max(0, committed - paid);
+
+  const updatePayload: Record<string, any> = {
+    ...data,
+    committedAmount: committed,
+    paidAmount: paid,
+    dueAmount: due,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await updateDoc(docRef, updatePayload);
+}
+
+/**
+ * Record a capital installment payment for a partner (আংশিক বা বকেয়া মূলধন জমা)
+ */
+export async function addCapitalPayment(
+  targetId: string,
+  partnerId: string,
+  amount: number,
+  notes?: string,
+  date?: string
+): Promise<void> {
+  const colRef = getPartnersCollection(targetId);
+  const docRef = doc(colRef, partnerId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) throw new Error('পার্টনার তথ্য পাওয়া যায়নি');
+
+  const existing = docSnap.data() as PartnerInvestor;
+  const paymentAmount = Number(amount) || 0;
+  if (paymentAmount <= 0) throw new Error('বৈধ জমার পরিমাণ দিন');
+
+  const newPaidAmount = (Number(existing.paidAmount) || 0) + paymentAmount;
+  const committedAmount = Number(existing.committedAmount) || 0;
+  const newDueAmount = Math.max(0, committedAmount - newPaidAmount);
+
+  const newContribution: CapitalContribution = {
+    id: `contrib_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    date: date || new Date().toISOString().split('T')[0],
+    amount: paymentAmount,
+    notes: notes || 'বকেয়া মূলধন কিস্তি জমা',
+  };
+
+  const existingContributions = existing.contributions || [];
+
+  await updateDoc(docRef, {
+    paidAmount: newPaidAmount,
+    dueAmount: newDueAmount,
+    contributions: [...existingContributions, newContribution],
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Delete a partner or investor record
+ */
+export async function deletePartnerInvestor(targetId: string, partnerId: string): Promise<void> {
+  const colRef = getPartnersCollection(targetId);
+  await deleteDoc(doc(colRef, partnerId));
+}
+
+// ============================================================================
+// SUPPLIER / WHOLESALER ACCOUNTS PAYABLE (পাইকার / হোলসেলার দেনা খাতা)
+// ============================================================================
+
+/**
+ * Add a new supplier due record (বাকিতে মাল ক্রয়)
+ */
+export async function addSupplierDue(
+  targetId: string,
+  due: Omit<SupplierDue, 'id' | 'createdAt'>
+): Promise<string> {
+  const colRef = getSupplierDuesCollection(targetId);
+  const docRef = doc(colRef);
+  const total = Number(due.totalAmount) || 0;
+  const paid = Number(due.paidAmount) || 0;
+  const remainingDue = Math.max(0, total - paid);
+  const status = remainingDue <= 0 ? 'paid' : paid > 0 ? 'partial' : 'due';
+
+  const initialPayments: SupplierPayment[] =
+    due.payments && due.payments.length > 0
+      ? due.payments
+      : paid > 0
+      ? [
+          {
+            id: `pay_${Date.now()}`,
+            date: due.purchaseDate || new Date().toISOString().split('T')[0],
+            amount: paid,
+            paymentMethod: 'নগদ',
+            notes: 'অগ্রিম/নগদ পরিশোধিত',
+          },
+        ]
+      : [];
+
+  await setDoc(docRef, {
+    ...due,
+    totalAmount: total,
+    paidAmount: paid,
+    dueAmount: remainingDue,
+    status,
+    payments: initialPayments,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+/**
+ * Update supplier due details
+ */
+export async function updateSupplierDue(
+  targetId: string,
+  dueId: string,
+  data: Partial<SupplierDue>
+): Promise<void> {
+  const colRef = getSupplierDuesCollection(targetId);
+  const docRef = doc(colRef, dueId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) throw new Error('পাইকার দেনা রেকর্ড পাওয়া যায়নি');
+
+  const existing = snap.data() as SupplierDue;
+  const total = data.totalAmount !== undefined ? Number(data.totalAmount) : existing.totalAmount;
+  const paid = data.paidAmount !== undefined ? Number(data.paidAmount) : existing.paidAmount;
+  const remainingDue = Math.max(0, total - paid);
+  const status = remainingDue <= 0 ? 'paid' : paid > 0 ? 'partial' : 'due';
+
+  await updateDoc(docRef, {
+    ...data,
+    totalAmount: total,
+    paidAmount: paid,
+    dueAmount: remainingDue,
+    status,
+  });
+}
+
+/**
+ * Record a payment to supplier (পাইকার দেনা পরিশোধ)
+ * Optionally logs to expenses so cash flow / net profit tracks the payment.
+ */
+export async function paySupplierDue(
+  targetId: string,
+  dueId: string,
+  payAmount: number,
+  options?: {
+    date?: string;
+    paymentMethod?: string;
+    notes?: string;
+    recordExpense?: boolean;
+  }
+): Promise<void> {
+  const colRef = getSupplierDuesCollection(targetId);
+  const docRef = doc(colRef, dueId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) throw new Error('পাইকার দেনা রেকর্ড পাওয়া যায়নি');
+
+  const existing = snap.data() as SupplierDue;
+  const payment = Number(payAmount) || 0;
+  if (payment <= 0) throw new Error('সঠিক পরিশোধের পরিমাণ দিন');
+
+  const newPaidAmount = (Number(existing.paidAmount) || 0) + payment;
+  const totalAmount = Number(existing.totalAmount) || 0;
+  const newDueAmount = Math.max(0, totalAmount - newPaidAmount);
+  const newStatus = newDueAmount <= 0 ? 'paid' : 'partial';
+
+  const date = options?.date || new Date().toISOString().split('T')[0];
+  const paymentMethod = options?.paymentMethod || 'নগদ';
+  const notes = options?.notes || `পাইকার বকেয়া পরিশোধ (${existing.supplierName})`;
+
+  let loggedExpenseId: string | undefined;
+
+  // If recordExpense is true (default true), create an expense entry
+  if (options?.recordExpense !== false) {
+    try {
+      loggedExpenseId = await addExpense(targetId, {
+        title: `পাইকার দেনা পরিশোধ: ${existing.supplierName}`,
+        amount: payment,
+        category: 'পাইকার বিল পরিশোধ',
+        date,
+        paidBy: paymentMethod,
+        supplierDueId: dueId,
+        notes: notes + (existing.invoiceNo ? ` [চালান: ${existing.invoiceNo}]` : ''),
+      });
+    } catch (err) {
+      console.warn('Could not auto-log supplier payment to expenses:', err);
+    }
+  }
+
+  const newPaymentRecord: SupplierPayment = {
+    id: `pay_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    date,
+    amount: payment,
+    paymentMethod,
+    notes,
+    expenseId: loggedExpenseId,
+  };
+
+  const existingPayments = existing.payments || [];
+
+  await updateDoc(docRef, {
+    paidAmount: newPaidAmount,
+    dueAmount: newDueAmount,
+    status: newStatus,
+    payments: [...existingPayments, newPaymentRecord],
+  });
+}
+
+/**
+ * Delete a supplier due record
+ */
+export async function deleteSupplierDue(targetId: string, dueId: string): Promise<void> {
+  const colRef = getSupplierDuesCollection(targetId);
+  await deleteDoc(doc(colRef, dueId));
 }

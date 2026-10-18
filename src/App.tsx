@@ -10,16 +10,25 @@ import { DashboardView } from './components/DashboardView';
 import { StockView } from './components/StockView';
 import { SaleEntryView } from './components/SaleEntryView';
 import { SalesHistoryView } from './components/SalesHistoryView';
-import { CreditDuesView } from './components/CreditDuesView';
+import { CreditDuesView, DuesSubTab } from './components/CreditDuesView';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 
 export default function App() {
   const { user, loading } = useAuth();
-  const { lowStockProducts, customerDues } = useStore();
+  const { lowStockProducts, customerDues, supplierDues } = useStore();
   const { language } = useLanguage();
   const { themeId, activeTheme, customBg } = useTheme();
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const [duesSubTab, setDuesSubTab] = useState<DuesSubTab>('customer');
+
+  const handleNavigate = (tab: NavTab, subTab?: DuesSubTab) => {
+    if (tab === 'dues' && subTab) {
+      setDuesSubTab(subTab);
+    }
+    setCurrentTab(tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   if (loading) {
     return (
@@ -39,6 +48,9 @@ export default function App() {
   const appBgClass = themeId === 'custom' ? '' : activeTheme.pageBgClass;
   const appStyle = themeId === 'custom' ? { backgroundColor: `${customBg}10` } : {};
 
+  const totalDuesBadgeCount =
+    customerDues.length + supplierDues.filter((s) => s.dueAmount > 0).length;
+
   return (
     <div
       className={`min-h-screen ${appBgClass} flex flex-col antialiased transition-colors duration-300`}
@@ -50,13 +62,13 @@ export default function App() {
       {/* Main Content Area: Centered container up to 600px */}
       <main className="flex-1 w-full max-w-[600px] mx-auto px-3.5 pt-4 pb-24">
         <PWAInstallBanner variant="banner" />
-        {currentTab === 'dashboard' && <DashboardView onNavigate={(t) => setCurrentTab(t)} />}
+        {currentTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
         {currentTab === 'stock' && <StockView />}
         {currentTab === 'sale' && (
           <SaleEntryView onSuccessNavigate={() => setCurrentTab('history')} />
         )}
         {currentTab === 'history' && <SalesHistoryView />}
-        {currentTab === 'dues' && <CreditDuesView />}
+        {currentTab === 'dues' && <CreditDuesView initialSubTab={duesSubTab} />}
       </main>
 
       {/* Offline Connectivity Notification */}
@@ -66,11 +78,14 @@ export default function App() {
       <BottomNav
         currentTab={currentTab}
         onSelectTab={(tab) => {
+          if (tab === 'dues') {
+            setDuesSubTab('customer');
+          }
           setCurrentTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         lowStockCount={lowStockProducts.length}
-        duesCount={customerDues.length}
+        duesCount={totalDuesBadgeCount}
       />
     </div>
   );

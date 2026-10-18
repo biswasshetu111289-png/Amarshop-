@@ -5,18 +5,42 @@ import { useAuth } from './AuthContext';
 import {
   getProductsCollection,
   getSalesCollection,
+  getExpensesCollection,
+  getPartnersCollection,
+  getSupplierDuesCollection,
   fetchUserShops,
   ensureUserDefaultShop,
   createShop as apiCreateShop,
   requestJoinShop as apiRequestJoinShop,
   updateShopDetails as apiUpdateShopDetails,
   deleteShop as apiDeleteShop,
+  addExpense as apiAddExpense,
+  updateExpense as apiUpdateExpense,
+  deleteExpense as apiDeleteExpense,
+  addPartnerInvestor as apiAddPartnerInvestor,
+  updatePartnerInvestor as apiUpdatePartnerInvestor,
+  addCapitalPayment as apiAddCapitalPayment,
+  deletePartnerInvestor as apiDeletePartnerInvestor,
+  addSupplierDue as apiAddSupplierDue,
+  updateSupplierDue as apiUpdateSupplierDue,
+  paySupplierDue as apiPaySupplierDue,
+  deleteSupplierDue as apiDeleteSupplierDue,
   isEmailMatch,
 } from '../services/storeService';
-import { Product, Sale, CustomerDueSummary, Shop, ShopRole, StoreBackupData } from '../types';
+import {
+  Product,
+  Sale,
+  CustomerDueSummary,
+  Shop,
+  ShopRole,
+  StoreBackupData,
+  Expense,
+  PartnerInvestor,
+  SupplierDue,
+} from '../types';
 import { restoreBackupIntoShop, checkAndExecuteAutoBackup } from '../services/backupService';
 
-interface StoreContextType {
+export interface StoreContextType {
   // Active Shop & List
   currentShop: Shop | null;
   shops: Shop[];
@@ -57,7 +81,41 @@ interface StoreContextType {
   totalProductsCount: number;
   todaySalesAmount: number;
   totalProfitAmount: number;
+  grossProfitAmount: number;
   lowStockProducts: Product[];
+
+  // Expenses & Actual Net Profit
+  expenses: Expense[];
+  loadingExpenses: boolean;
+  totalExpensesAmount: number;
+  netProfitAmount: number;
+  addExpense: (expense: Omit<Expense, 'id' | 'createdAt'>) => Promise<string>;
+  updateExpense: (expenseId: string, data: Partial<Expense>) => Promise<void>;
+  deleteExpense: (expenseId: string) => Promise<void>;
+
+  // Partnership & Investors
+  partners: PartnerInvestor[];
+  loadingPartners: boolean;
+  totalCommittedCapital: number;
+  totalPaidCapital: number;
+  totalCapitalDue: number;
+  addPartnerInvestor: (partner: Omit<PartnerInvestor, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
+  updatePartnerInvestor: (partnerId: string, data: Partial<PartnerInvestor>) => Promise<void>;
+  addCapitalPayment: (partnerId: string, amount: number, notes?: string, date?: string) => Promise<void>;
+  deletePartnerInvestor: (partnerId: string) => Promise<void>;
+
+  // Wholesaler / Supplier Dues (Accounts Payable)
+  supplierDues: SupplierDue[];
+  loadingSupplierDues: boolean;
+  totalSupplierDuesAmount: number;
+  addSupplierDue: (due: Omit<SupplierDue, 'id' | 'createdAt'>) => Promise<string>;
+  updateSupplierDue: (dueId: string, data: Partial<SupplierDue>) => Promise<void>;
+  paySupplierDue: (
+    dueId: string,
+    payAmount: number,
+    options?: { date?: string; paymentMethod?: string; notes?: string; recordExpense?: boolean }
+  ) => Promise<void>;
+  deleteSupplierDue: (dueId: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType>({
@@ -85,7 +143,34 @@ const StoreContext = createContext<StoreContextType>({
   totalProductsCount: 0,
   todaySalesAmount: 0,
   totalProfitAmount: 0,
+  grossProfitAmount: 0,
   lowStockProducts: [],
+
+  expenses: [],
+  loadingExpenses: true,
+  totalExpensesAmount: 0,
+  netProfitAmount: 0,
+  addExpense: async () => '',
+  updateExpense: async () => {},
+  deleteExpense: async () => {},
+
+  partners: [],
+  loadingPartners: true,
+  totalCommittedCapital: 0,
+  totalPaidCapital: 0,
+  totalCapitalDue: 0,
+  addPartnerInvestor: async () => '',
+  updatePartnerInvestor: async () => {},
+  addCapitalPayment: async () => {},
+  deletePartnerInvestor: async () => {},
+
+  supplierDues: [],
+  loadingSupplierDues: true,
+  totalSupplierDuesAmount: 0,
+  addSupplierDue: async () => '',
+  updateSupplierDue: async () => {},
+  paySupplierDue: async () => {},
+  deleteSupplierDue: async () => {},
 });
 
 const getUserActiveShopKey = (uid: string) => `amar_business_active_shop_${uid}`;
@@ -101,6 +186,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [sales, setSales] = useState<Sale[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingSales, setLoadingSales] = useState(true);
+
+  // Accounting states: Expenses, Partners, Supplier Dues
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loadingExpenses, setLoadingExpenses] = useState(true);
+
+  const [partners, setPartners] = useState<PartnerInvestor[]>([]);
+  const [loadingPartners, setLoadingPartners] = useState(true);
+
+  const [supplierDues, setSupplierDues] = useState<SupplierDue[]>([]);
+  const [loadingSupplierDues, setLoadingSupplierDues] = useState(true);
 
   // Switch shop helper - saves active shop ID uniquely per user
   const setCurrentShop = useCallback((shop: Shop) => {
@@ -469,6 +564,134 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => unsubscribe();
   }, [targetStoreId]);
 
+  // Subscribe to expenses of current shop
+  useEffect(() => {
+    if (!targetStoreId) {
+      setExpenses([]);
+      setLoadingExpenses(false);
+      return;
+    }
+
+    setLoadingExpenses(true);
+    const q = query(getExpensesCollection(targetStoreId), orderBy('date', 'desc'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: Expense[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          items.push({
+            id: docSnap.id,
+            title: data.title || '',
+            amount: Number(data.amount) || 0,
+            category: data.category || 'অন্যান্য খরচ',
+            date: data.date || '',
+            paidBy: data.paidBy || '',
+            notes: data.notes || '',
+            supplierDueId: data.supplierDueId || '',
+            createdAt: data.createdAt,
+          });
+        });
+        setExpenses(items);
+        setLoadingExpenses(false);
+      },
+      (error) => {
+        console.error('Error fetching expenses:', error);
+        setLoadingExpenses(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [targetStoreId]);
+
+  // Subscribe to partners/investors of current shop
+  useEffect(() => {
+    if (!targetStoreId) {
+      setPartners([]);
+      setLoadingPartners(false);
+      return;
+    }
+
+    setLoadingPartners(true);
+    const q = query(getPartnersCollection(targetStoreId), orderBy('createdAt', 'asc'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: PartnerInvestor[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          items.push({
+            id: docSnap.id,
+            name: data.name || '',
+            phone: data.phone || '',
+            role: data.role || 'partner',
+            committedAmount: Number(data.committedAmount) || 0,
+            paidAmount: Number(data.paidAmount) || 0,
+            dueAmount: Number(data.dueAmount) || 0,
+            profitShareRatio: Number(data.profitShareRatio) || 0,
+            contributions: data.contributions || [],
+            notes: data.notes || '',
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          });
+        });
+        setPartners(items);
+        setLoadingPartners(false);
+      },
+      (error) => {
+        console.error('Error fetching partners:', error);
+        setLoadingPartners(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [targetStoreId]);
+
+  // Subscribe to supplier dues of current shop
+  useEffect(() => {
+    if (!targetStoreId) {
+      setSupplierDues([]);
+      setLoadingSupplierDues(false);
+      return;
+    }
+
+    setLoadingSupplierDues(true);
+    const q = query(getSupplierDuesCollection(targetStoreId), orderBy('purchaseDate', 'desc'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: SupplierDue[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          items.push({
+            id: docSnap.id,
+            supplierName: data.supplierName || '',
+            phone: data.phone || '',
+            invoiceNo: data.invoiceNo || '',
+            description: data.description || '',
+            totalAmount: Number(data.totalAmount) || 0,
+            paidAmount: Number(data.paidAmount) || 0,
+            dueAmount: Number(data.dueAmount) || 0,
+            purchaseDate: data.purchaseDate || '',
+            dueDate: data.dueDate || '',
+            status: data.status || 'due',
+            payments: data.payments || [],
+            notes: data.notes || '',
+            createdAt: data.createdAt,
+          });
+        });
+        setSupplierDues(items);
+        setLoadingSupplierDues(false);
+      },
+      (error) => {
+        console.error('Error fetching supplier dues:', error);
+        setLoadingSupplierDues(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [targetStoreId]);
+
   // Product buy price map for calculating profit
   const productBuyPriceMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -537,6 +760,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .reduce((sum, s) => sum + s.total, 0);
   }, [sales, todayStr]);
 
+  // Gross profit from product sales
   const totalProfitAmount = useMemo(() => {
     let profit = 0;
     for (const s of sales) {
@@ -552,9 +776,134 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return profit;
   }, [sales, productBuyPriceMap]);
 
+  // Expenses & Net profit calculations
+  const totalExpensesAmount = useMemo(() => {
+    return expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  }, [expenses]);
+
+  const grossProfitAmount = totalProfitAmount;
+  const netProfitAmount = useMemo(() => {
+    return grossProfitAmount - totalExpensesAmount;
+  }, [grossProfitAmount, totalExpensesAmount]);
+
+  // Wholesaler / Supplier dues total
+  const totalSupplierDuesAmount = useMemo(() => {
+    return supplierDues.reduce((sum, d) => sum + (Number(d.dueAmount) || 0), 0);
+  }, [supplierDues]);
+
+  // Partner capital calculations
+  const { totalCommittedCapital, totalPaidCapital, totalCapitalDue } = useMemo(() => {
+    let comm = 0;
+    let paid = 0;
+    let due = 0;
+    for (const p of partners) {
+      comm += Number(p.committedAmount) || 0;
+      paid += Number(p.paidAmount) || 0;
+      due += Number(p.dueAmount) || 0;
+    }
+    return {
+      totalCommittedCapital: comm,
+      totalPaidCapital: paid,
+      totalCapitalDue: due,
+    };
+  }, [partners]);
+
   const lowStockProducts = useMemo(() => {
     return products.filter((p) => p.qty <= 5);
   }, [products]);
+
+  // Accounting Action Callbacks
+  const addExpense = useCallback(
+    async (expense: Omit<Expense, 'id' | 'createdAt'>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      return await apiAddExpense(targetStoreId, expense);
+    },
+    [targetStoreId]
+  );
+
+  const updateExpense = useCallback(
+    async (expenseId: string, data: Partial<Expense>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiUpdateExpense(targetStoreId, expenseId, data);
+    },
+    [targetStoreId]
+  );
+
+  const deleteExpense = useCallback(
+    async (expenseId: string) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiDeleteExpense(targetStoreId, expenseId);
+    },
+    [targetStoreId]
+  );
+
+  const addPartnerInvestor = useCallback(
+    async (partner: Omit<PartnerInvestor, 'id' | 'createdAt' | 'updatedAt'>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      return await apiAddPartnerInvestor(targetStoreId, partner);
+    },
+    [targetStoreId]
+  );
+
+  const updatePartnerInvestor = useCallback(
+    async (partnerId: string, data: Partial<PartnerInvestor>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiUpdatePartnerInvestor(targetStoreId, partnerId, data);
+    },
+    [targetStoreId]
+  );
+
+  const addCapitalPayment = useCallback(
+    async (partnerId: string, amount: number, notes?: string, date?: string) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiAddCapitalPayment(targetStoreId, partnerId, amount, notes, date);
+    },
+    [targetStoreId]
+  );
+
+  const deletePartnerInvestor = useCallback(
+    async (partnerId: string) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiDeletePartnerInvestor(targetStoreId, partnerId);
+    },
+    [targetStoreId]
+  );
+
+  const addSupplierDue = useCallback(
+    async (due: Omit<SupplierDue, 'id' | 'createdAt'>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      return await apiAddSupplierDue(targetStoreId, due);
+    },
+    [targetStoreId]
+  );
+
+  const updateSupplierDue = useCallback(
+    async (dueId: string, data: Partial<SupplierDue>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiUpdateSupplierDue(targetStoreId, dueId, data);
+    },
+    [targetStoreId]
+  );
+
+  const paySupplierDue = useCallback(
+    async (
+      dueId: string,
+      payAmount: number,
+      options?: { date?: string; paymentMethod?: string; notes?: string; recordExpense?: boolean }
+    ) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiPaySupplierDue(targetStoreId, dueId, payAmount, options);
+    },
+    [targetStoreId]
+  );
+
+  const deleteSupplierDue = useCallback(
+    async (dueId: string) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiDeleteSupplierDue(targetStoreId, dueId);
+    },
+    [targetStoreId]
+  );
 
   const value: StoreContextType = {
     currentShop,
@@ -581,7 +930,37 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     totalProductsCount: products.length,
     todaySalesAmount,
     totalProfitAmount,
+    grossProfitAmount,
     lowStockProducts,
+
+    // Expenses
+    expenses,
+    loadingExpenses,
+    totalExpensesAmount,
+    netProfitAmount,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+
+    // Partners & Investors
+    partners,
+    loadingPartners,
+    totalCommittedCapital,
+    totalPaidCapital,
+    totalCapitalDue,
+    addPartnerInvestor,
+    updatePartnerInvestor,
+    addCapitalPayment,
+    deletePartnerInvestor,
+
+    // Supplier Dues
+    supplierDues,
+    loadingSupplierDues,
+    totalSupplierDuesAmount,
+    addSupplierDue,
+    updateSupplierDue,
+    paySupplierDue,
+    deleteSupplierDue,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

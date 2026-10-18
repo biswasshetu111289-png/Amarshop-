@@ -147,3 +147,87 @@ export interface CustomerDueSummary {
   sales: Sale[];
   lastDate: string;
 }
+
+// ---------------------------------------------
+// Expense & Cost Tracker Types (খরচের খাতা)
+// ---------------------------------------------
+export const EXPENSE_CATEGORIES = [
+  'দোকান ভাড়া',
+  'কর্মচারী বেতন',
+  'বিদ্যুৎ ও ইউটিলিটি',
+  'পণ্য ডেলিভারি/কুরিয়ার',
+  'যাতায়াত ও ভাড়া',
+  'নাস্তা ও আপ্যায়ন',
+  'প্যাকেজিং সামগ্রী',
+  'পাইকার বিল পরিশোধ',
+  'মেরামত ও রক্ষণাবেক্ষণ',
+  'অন্যান্য খরচ',
+] as const;
+
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export interface Expense {
+  id: string;
+  title: string;
+  amount: number;
+  category: ExpenseCategory | string;
+  date: string; // YYYY-MM-DD
+  paidBy?: string; // e.g. ক্যাশ কাউন্টার, পার্টনার ১, পার্টনার ২
+  notes?: string;
+  supplierDueId?: string; // Linked supplier due if this was a supplier payout
+  createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;
+}
+
+// ---------------------------------------------
+// Partnership & Investor Management Types (পার্টনারশিপ ও ইনভেস্টর হিসাব)
+// ---------------------------------------------
+export interface CapitalContribution {
+  id: string;
+  date: string;
+  amount: number;
+  notes?: string;
+}
+
+export interface PartnerInvestor {
+  id: string;
+  name: string;
+  phone?: string;
+  role: 'partner' | 'investor'; // পার্টনার vs ইনভেস্টর
+  committedAmount: number; // চুক্তিবদ্ধ বা প্রতিশ্রুত মূলধন (যেমন ৳১০,০০০)
+  paidAmount: number; // এ পর্যন্ত জমা দেওয়া মূলধন (যেমন ৳৫,০০০)
+  dueAmount: number; // বাকি ইনভেস্টমেন্ট মূলধন (যেমন ৳৫,০০০)
+  profitShareRatio?: number; // প্রফিট শেয়ার অনুপাত % (যেমন ৫০%)
+  contributions?: CapitalContribution[]; // আংশিক কিস্তি জমার হিস্ট্রি
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ---------------------------------------------
+// Supplier / Wholesaler Accounts Payable (পাইকার / হোলসেলার দেনা খাতা)
+// ---------------------------------------------
+export interface SupplierPayment {
+  id: string;
+  date: string;
+  amount: number;
+  paymentMethod?: string;
+  notes?: string;
+  expenseId?: string; // Linked expense ID if auto-logged
+}
+
+export interface SupplierDue {
+  id: string;
+  supplierName: string; // পাইকার / হোলসেলার / মহাজনের নাম
+  phone?: string;
+  invoiceNo?: string; // চালান বা মেমো নম্বর
+  description?: string; // বাকিতে নেওয়া মালের বিবরণ (যেমন ৫০ পিস শার্ট)
+  totalAmount: number; // মোট মালের দাম (৳)
+  paidAmount: number; // পরিশোধিত টাকা (৳)
+  dueAmount: number; // পাইকার পাবে / বকেয়া দেনা (৳)
+  purchaseDate: string; // ক্রয়ের তারিখ (YYYY-MM-DD)
+  dueDate?: string; // পরিশোধের প্রতিশ্রুত তারিখ (ঐচ্ছিক)
+  status: 'due' | 'partial' | 'paid';
+  payments?: SupplierPayment[];
+  notes?: string;
+  createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;
+}

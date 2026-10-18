@@ -51,7 +51,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'dues' as NavTab,
-      label: language === 'en' ? 'Dues' : 'বাকি',
+      label: language === 'en' ? 'Accounts' : 'হিসাব ও বাকি',
       icon: BookOpen,
       badge: duesCount,
       badgeColor: 'bg-amber-500',
