@@ -1,6 +1,7 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { formatCurrency, formatQty, formatBengaliDate, formatNumber } from '../utils/formatters';
 import {
   Package,
@@ -31,6 +32,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     sales,
   } = useStore();
   const { language, t } = useLanguage();
+  const { activeTheme, themeId, customBg } = useTheme();
 
   const recentSales = sales.slice(0, 5);
 
@@ -41,10 +43,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       ? (language === 'bn' ? 'ম্যানেজার' : 'Manager')
       : (language === 'bn' ? 'ভিউয়ার' : 'Viewer');
 
+  const bannerBgClass = themeId === 'custom' ? 'text-white' : activeTheme.headerBgClass;
+  const bannerStyle = themeId === 'custom' ? { backgroundColor: customBg } : {};
+
   return (
     <div className="space-y-4 pb-4">
       {/* Welcome Banner / Today Overview with Current Shop Name */}
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 rounded-2xl p-4 text-white shadow-md flex items-center justify-between">
+      <div className={`${bannerBgClass} rounded-2xl p-4 text-white shadow-md flex items-center justify-between transition-colors duration-300`} style={bannerStyle}>
         <div className="flex items-center gap-3">
           {currentShop?.logoUrl && (
             <div className="w-12 h-12 rounded-xl bg-white/20 border border-white/30 overflow-hidden shrink-0 shadow-sm">

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useStore } from './context/StoreContext';
 import { useLanguage } from './context/LanguageContext';
+import { useTheme } from './context/ThemeContext';
 import { AuthView } from './components/AuthView';
 import { Header } from './components/Header';
 import { BottomNav, NavTab } from './components/BottomNav';
@@ -17,6 +18,7 @@ export default function App() {
   const { user, loading } = useAuth();
   const { lowStockProducts, customerDues } = useStore();
   const { language } = useLanguage();
+  const { themeId, activeTheme, customBg } = useTheme();
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
 
   if (loading) {
@@ -34,8 +36,14 @@ export default function App() {
     return <AuthView />;
   }
 
+  const appBgClass = themeId === 'custom' ? '' : activeTheme.pageBgClass;
+  const appStyle = themeId === 'custom' ? { backgroundColor: `${customBg}10` } : {};
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col antialiased">
+    <div
+      className={`min-h-screen ${appBgClass} flex flex-col antialiased transition-colors duration-300`}
+      style={appStyle}
+    >
       {/* Top Mobile Sticky Header */}
       <Header />
 

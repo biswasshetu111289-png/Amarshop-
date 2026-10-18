@@ -65,13 +65,20 @@ import {
   ExternalLink,
   RefreshCw,
   Globe,
+  Palette,
+  EyeOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { PWAInstallBanner } from './PWAInstallBanner';
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { auth } from '../firebase';
 
 export const Header: React.FC = () => {
   const { user, logout, requestPasswordReset } = useAuth();
   const { language, setLanguage, toggleLanguage, t } = useLanguage();
+  const { activeTheme, themeId, customBg, setShowThemeModal } = useTheme();
   const {
     currentShop,
     shops,
@@ -82,6 +89,7 @@ export const Header: React.FC = () => {
     createNewShop,
     joinShop,
     updateShop,
+    deleteShop: contextDeleteShop,
     restoreBackup,
   } = useStore();
   const { showToast } = useToast();
@@ -93,6 +101,12 @@ export const Header: React.FC = () => {
   const [showJoinShopModal, setShowJoinShopModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showEditShopModal, setShowEditShopModal] = useState(false);
+
+  // Delete Shop Confirmation State (Password mandatory)
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deletingShop, setDeletingShop] = useState(false);
 
   // Edit Shop state
   const [editingShop, setEditingShop] = useState<Shop | null>(null);
@@ -260,6 +274,56 @@ export const Header: React.FC = () => {
       showToast(err.message || 'দোকানের তথ্য পরিবর্তন করতে সমস্যা হয়েছে', 'error');
     } finally {
       setSavingShopEdit(false);
+    }
+  };
+
+  const handleDeleteShopWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingShop) return;
+    if (!deletePassword.trim()) {
+      showToast('দোকান মুছে ফেলতে পাসওয়ার্ড প্রদান বাধ্যতামূলক', 'warning');
+      return;
+    }
+
+    setDeletingShop(true);
+    try {
+      // Re-authenticate user if email & auth available
+      if (auth.currentUser && user?.email) {
+        try {
+          const credential = EmailAuthProvider.credential(user.email, deletePassword.trim());
+          await reauthenticateWithCredential(auth.currentUser, credential);
+        } catch (authErr: any) {
+          const errCode = authErr?.code || authErr?.message || '';
+          if (
+            errCode.includes('wrong-password') ||
+            errCode.includes('invalid-credential') ||
+            errCode.includes('invalid-password')
+          ) {
+            showToast('ভুল পাসওয়ার্ড! সঠিক পাসওয়ার্ড ছাড়া দোকান মুছে ফেলা যাবে না।', 'error');
+            setDeletingShop(false);
+            return;
+          }
+          const isGoogleUser = auth.currentUser.providerData.some((p) => p.providerId === 'google.com');
+          if (isGoogleUser && deletePassword.trim().toUpperCase() !== 'DELETE' && deletePassword.trim() !== user.email) {
+            showToast('Google একাউন্টের ক্ষেত্রে পাসওয়ার্ড অথবা "DELETE" লিখে নিশ্চিত করুন', 'warning');
+            setDeletingShop(false);
+            return;
+          }
+        }
+      }
+
+      await contextDeleteShop(editingShop.id);
+      showToast(`"${editingShop.name}" দোকানটি সফলভাবে মুছে ফেলা হয়েছে!`, 'success');
+      setShowDeleteConfirmModal(false);
+      setShowEditShopModal(false);
+      setDeletePassword('');
+      setEditingShop(null);
+    } catch (err: unknown) {
+      console.error('Delete shop error:', err);
+      const msg = err instanceof Error ? err.message : 'দোকান মুছতে সমস্যা হয়েছে';
+      showToast(msg, 'error');
+    } finally {
+      setDeletingShop(false);
     }
   };
 
@@ -583,10 +647,12 @@ export const Header: React.FC = () => {
   };
 
   const pendingRequestsCount = Object.keys(currentShop?.joinRequests || {}).length;
+  const headerBgClass = themeId === 'custom' ? 'text-white shadow-md' : activeTheme.headerBgClass;
+  const headerCustomStyle = themeId === 'custom' ? { backgroundColor: customBg } : {};
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 text-white shadow-md border-b border-indigo-600/30">
+      <header className={`sticky top-0 z-40 ${headerBgClass} transition-colors duration-300`} style={headerCustomStyle}>
         <div className="max-w-[600px] mx-auto px-3.5 py-2.5 flex items-center justify-between">
           {/* Shop Switcher & Title */}
           <div className="flex items-center gap-2.5">
@@ -661,12 +727,23 @@ export const Header: React.FC = () => {
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5">
+            {/* Global Theme & Color Customizer Button */}
+            <button
+              type="button"
+              onClick={() => setShowThemeModal(true)}
+              title={language === 'bn' ? 'অ্যাপের থিম ও কালার পরিবর্তন' : 'Change Theme & Colors'}
+              className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 text-white transition flex items-center gap-1.5 text-xs font-bold border border-white/20 shadow-xs cursor-pointer"
+            >
+              <Palette className="w-3.5 h-3.5 text-amber-300" />
+              <span className="hidden sm:inline">{language === 'bn' ? 'থিম' : 'Theme'}</span>
+            </button>
+
             {/* Language Switcher Button */}
             <button
               type="button"
               onClick={toggleLanguage}
               title={language === 'bn' ? 'Switch to English' : 'বাংলায় পরিবর্তন করুন'}
-              className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 text-white transition flex items-center gap-1.5 text-xs font-bold border border-white/20 shadow-xs"
+              className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 text-white transition flex items-center gap-1.5 text-xs font-bold border border-white/20 shadow-xs cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5 text-yellow-300" />
               <span>{language === 'bn' ? 'English' : 'বাংলা'}</span>
@@ -1416,6 +1493,34 @@ export const Header: React.FC = () => {
                 </div>
               </div>
 
+              {/* App Theme Selection Card */}
+              <div className="p-3 bg-gradient-to-r from-slate-50 to-purple-50/50 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+                    <Palette className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-xs">
+                      {language === 'bn' ? 'অ্যাপের কালার ও থিম (Theme)' : 'App Theme & Colors'}
+                    </h4>
+                    <p className="text-[10px] text-slate-500">
+                      বর্তমান: {themeId === 'custom' ? 'কাস্টম কালার' : activeTheme.nameBn}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAccountModal(false);
+                    setShowThemeModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition cursor-pointer"
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>{language === 'bn' ? 'থিম বদলান' : 'Change'}</span>
+                </button>
+              </div>
+
               {/* Data Backup & Restore Suite */}
               <div className="p-3 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 rounded-xl border border-blue-200 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1769,6 +1874,35 @@ export const Header: React.FC = () => {
                 ℹ️ লোগো ও নাম পরিবর্তন করলে সকল মেম্বার ও রসিদে সাথে সাথে নতুন তথ্য প্রদর্শিত হবে।
               </div>
 
+              {/* Danger Zone: Delete Shop */}
+              {isAdmin && editingShop && (
+                <div className="p-3 bg-rose-50/90 rounded-xl border border-rose-200 space-y-2 mt-3">
+                  <div className="flex items-center justify-between">
+                    <h5 className="font-bold text-rose-950 text-xs flex items-center gap-1.5">
+                      <Trash2 className="w-4 h-4 text-rose-600" />
+                      দোকান মুছে ফেলুন (Delete Shop)
+                    </h5>
+                    <span className="text-[10px] font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full">
+                      স্থায়ী ডিলিট
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-700 leading-relaxed">
+                    এই দোকানটি মুছে ফেললে এর সকল পণ্য স্টক, বিক্রির হিসাব ও দেনাদারদের হিসাব স্থায়ীভাবে ডিলিট হয়ে যাবে। নিরাপত্তার স্বার্থে পাসওয়ার্ড প্রদান বাধ্যতামূলক।
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeletePassword('');
+                      setShowDeleteConfirmModal(true);
+                    }}
+                    className="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>&quot;{editingShop.name}&quot; দোকান ডিলিট করুন</span>
+                  </button>
+                </div>
+              )}
+
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -1783,6 +1917,103 @@ export const Header: React.FC = () => {
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {savingShopEdit ? 'সংরক্ষণ হচ্ছে...' : 'সংরক্ষণ করুন'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Shop Confirmation Modal with Mandatory Password */}
+      {showDeleteConfirmModal && editingShop && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-rose-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-rose-100 text-rose-600 rounded-xl">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-rose-950 text-base">দোকান মুছে ফেলা নিশ্চিতকরণ</h3>
+                  <p className="text-xs text-rose-600">পাসওয়ার্ড প্রদান বাধ্যতামূলক</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteConfirmModal(false);
+                  setDeletePassword('');
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDeleteShopWithPassword} className="space-y-3.5 text-xs">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
+                <p className="font-bold text-rose-900">
+                  সতর্কতা: &quot;{editingShop.name}&quot; দোকানটি স্থায়ীভাবে ডিলিট হতে যাচ্ছে!
+                </p>
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  এই দোকানের সাথে সম্পর্কিত সকল পণ্য, বিক্রয় ইতিহাস ও দেনাদারদের হিসাব পুরোপুরি মুছে যাবে। এই পদক্ষেপটি আর কখনো ফিরিয়ে আনা সম্ভব নয়।
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  আপনার একাউন্টের পাসওয়ার্ড লিখুন <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showDeletePassword ? 'text' : 'password'}
+                    required
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="আপনার গোপন পাসওয়ার্ড লিখুন"
+                    className="w-full pl-3 pr-9 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDeletePassword(!showDeletePassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  >
+                    {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  আপনার অনুমতি ও নিরাপত্তা নিশ্চিত করতেই পাসওয়ার্ড প্রদান বাধ্যতামূলক।
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={deletingShop}
+                  onClick={() => {
+                    setShowDeleteConfirmModal(false);
+                    setDeletePassword('');
+                  }}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 font-semibold"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  disabled={deletingShop || !deletePassword.trim()}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {deletingShop ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>যাচাই ও ডিলিট হচ্ছে...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>পাসওয়ার্ড দিয়ে স্থায়ীভাবে মুছুন</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

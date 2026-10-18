@@ -596,7 +596,9 @@ export async function deleteShop(shopId: string, requesterUid: string): Promise<
   if (!shopSnap.exists()) return;
 
   const shopData = shopSnap.data() as Shop;
-  if (shopData.ownerId !== requesterUid) {
+  const isOwner = shopData.ownerId === requesterUid;
+  const isAdminMember = shopData.members?.[requesterUid]?.role === 'admin';
+  if (!isOwner && !isAdminMember) {
     throw new Error('শুধুমাত্র দোকানের প্রধান এডমিন/মালিক দোকান ডিলিট করতে পারেন।');
   }
 

@@ -10,6 +10,7 @@ import {
   createShop as apiCreateShop,
   requestJoinShop as apiRequestJoinShop,
   updateShopDetails as apiUpdateShopDetails,
+  deleteShop as apiDeleteShop,
   isEmailMatch,
 } from '../services/storeService';
 import { Product, Sale, CustomerDueSummary, Shop, ShopRole, StoreBackupData } from '../types';
@@ -40,6 +41,7 @@ interface StoreContextType {
     shopId: string,
     data: { name: string; description?: string; address?: string; phone?: string; logoUrl?: string }
   ) => Promise<void>;
+  deleteShop: (shopId: string) => Promise<void>;
   restoreBackup: (
     backupData: StoreBackupData,
     mode?: 'merge' | 'replace'
@@ -71,6 +73,7 @@ const StoreContext = createContext<StoreContextType>({
   createNewShop: async () => ({} as Shop),
   joinShop: async () => ({ shopId: '', shopName: '' }),
   updateShop: async () => {},
+  deleteShop: async () => {},
   restoreBackup: async () => ({ restoredProducts: 0, restoredSales: 0 }),
 
   products: [],
@@ -261,6 +264,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     },
     [user, shops, currentShop]
+  );
+
+  // Delete shop - Admin/Owner only
+  const deleteShop = useCallback(
+    async (shopId: string) => {
+      if (!user) throw new Error('লগইন প্রয়োজন');
+      await apiDeleteShop(shopId, user.uid);
+
+      try {
+        const key = `user_shops_${user.uid}`;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const ids: string[] = JSON.parse(raw);
+          localStorage.setItem(key, JSON.stringify(ids.filter((id) => id !== shopId)));
+        }
+        const activeKey = getUserActiveShopKey(user.uid);
+        if (localStorage.getItem(activeKey) === shopId) {
+          localStorage.removeItem(activeKey);
+        }
+      } catch (e) {
+        console.warn('Storage clean error:', e);
+      }
+
+      const remaining = shops.filter((s) => s.id !== shopId);
+      setShops(remaining);
+      if (currentShop?.id === shopId) {
+        if (remaining.length > 0) {
+          setCurrentShop(remaining[0]);
+        } else {
+          const defaultShop = await ensureUserDefaultShop(
+            user.uid,
+            user.email || 'user@shop.com',
+            user.displayName ? `${user.displayName}-এর দোকান` : 'আমার প্রধান দোকান'
+          );
+          setShops([defaultShop]);
+          setCurrentShop(defaultShop);
+        }
+      }
+    },
+    [user, shops, currentShop, setCurrentShop]
   );
 
   // Restore backup into current shop
@@ -526,6 +569,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     createNewShop,
     joinShop,
     updateShop,
+    deleteShop,
     restoreBackup,
 
     products,

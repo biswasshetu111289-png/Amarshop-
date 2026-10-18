@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { StoreProvider } from './context/StoreContext';
 import { ToastProvider } from './context/ToastContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { registerSW } from 'virtual:pwa-register';
 
 // Register PWA service worker with auto-update
@@ -17,7 +18,9 @@ createRoot(document.getElementById('root')!).render(
       <LanguageProvider>
         <StoreProvider>
           <ToastProvider>
-            <App />
+            <ThemeProvider>
+              <App />
+            </ThemeProvider>
           </ToastProvider>
         </StoreProvider>
       </LanguageProvider>
