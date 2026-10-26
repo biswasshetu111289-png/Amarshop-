@@ -13,6 +13,7 @@ import { SalesHistoryView } from './components/SalesHistoryView';
 import { CreditDuesView, DuesSubTab } from './components/CreditDuesView';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { UpdateNotificationBanner } from './components/UpdateNotificationBanner';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -42,7 +43,14 @@ export default function App() {
   }
 
   if (!user) {
-    return <AuthView />;
+    return (
+      <div className="min-h-screen flex flex-col">
+        <UpdateNotificationBanner />
+        <div className="flex-1">
+          <AuthView />
+        </div>
+      </div>
+    );
   }
 
   const appBgClass = themeId === 'custom' ? '' : activeTheme.pageBgClass;
@@ -56,6 +64,9 @@ export default function App() {
       className={`min-h-screen ${appBgClass} flex flex-col antialiased transition-colors duration-300`}
       style={appStyle}
     >
+      {/* App Update Notification Banner */}
+      <UpdateNotificationBanner />
+
       {/* Top Mobile Sticky Header */}
       <Header />
 

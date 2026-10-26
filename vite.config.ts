@@ -11,14 +11,14 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['apple-touch-icon.png', 'icon.svg'],
+        includeAssets: ['apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png', 'version.json'],
         manifest: {
           id: '/',
           name: 'আমার বিজনেস ম্যানেজার',
           short_name: 'আমার বিজনেস',
           description: 'ক্ষুদ্র ব্যবসার পণ্য স্টক, নগদ ও বাকি বিক্রি এবং লাভের হিসাব পরিচালনার বাংলা ওয়েব অ্যাপ।',
-          theme_color: '#1d4ed8',
-          background_color: '#f8fafc',
+          theme_color: '#0a1628',
+          background_color: '#0a1628',
           display: 'standalone',
           start_url: '/',
           scope: '/',

@@ -256,13 +256,13 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
         <>
           {/* Viewer Notice */}
           {isViewer && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2.5 text-xs text-amber-800">
-              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-2.5 text-xs text-blue-900">
+              <ShieldAlert className="w-4 h-4 text-blue-600 shrink-0" />
               <span>
-                <strong>{language === 'bn' ? 'ভিউয়ার মোড:' : 'Viewer Mode:'}</strong>{' '}
+                <strong>{language === 'bn' ? 'কর্মচারী মোড:' : 'Staff / Viewer Mode:'}</strong>{' '}
                 {language === 'bn'
-                  ? 'আপনি শুধুমাত্র বাকির খাতা দেখতে পারবেন। বাকি পরিশোধ মার্ক করার জন্য ম্যানেজার বা এডমিন অনুমতি প্রয়োজন।'
-                  : 'You can only view dues. Manager or Admin permission is required to record due payments.'}
+                  ? 'আপনি দোকানের কাস্টমারদের বকেয়া বাকি আদায় ইনপুট করতে পারবেন। পাইকার দেনা, দৈনিক খরচ ও পার্টনারশিপ হিসাব সম্পূর্ণ সুরক্ষিত রাখা হয়েছে।'
+                  : 'You can record customer due collections. Wholesale debts, expenses, and partnership ledger remain protected.'}
               </span>
             </div>
           )}
@@ -379,16 +379,14 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
                       </span>
                     </div>
 
-                    {canManage && (
-                      <button
-                        onClick={() => openCollectionModal(item)}
-                        title={language === 'bn' ? 'বাকি আদায় বা পরিশোধ গ্রহণ করুন' : 'Collect due payment'}
-                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs shrink-0"
-                      >
-                        <Coins className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">{language === 'bn' ? 'বাকি আদায়' : 'Collect'}</span>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => openCollectionModal(item)}
+                      title={language === 'bn' ? 'বাকি আদায় বা পরিশোধ গ্রহণ করুন' : 'Collect due payment'}
+                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs shrink-0 cursor-pointer"
+                    >
+                      <Coins className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{language === 'bn' ? 'বাকি আদায়' : 'Collect'}</span>
+                    </button>
 
                     <button
                       onClick={() => toggleExpand(item.customer)}
