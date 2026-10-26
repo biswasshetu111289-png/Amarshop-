@@ -77,10 +77,18 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
   const [collectMode, setCollectMode] = useState<'full' | 'partial'>('full');
   const [collectAmount, setCollectAmount] = useState<string>('');
   const [collectPaymentMethod, setCollectPaymentMethod] = useState<string>('নগদ');
+  const [collectDate, setCollectDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [collectNotes, setCollectNotes] = useState<string>('');
   const [submittingCollection, setSubmittingCollection] = useState(false);
 
   const targetId = currentShop?.id || user?.uid || '';
+
+  // Lock viewers to customer dues tab
+  React.useEffect(() => {
+    if (isViewer && activeSubTab !== 'customer') {
+      setActiveSubTab('customer');
+    }
+  }, [isViewer, activeSubTab]);
 
   // Filter dues by customer name
   const filteredCustomerDues = useMemo(() => {
@@ -90,18 +98,10 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
   }, [customerDues, searchQuery]);
 
   const openCollectionModal = (dueSummary: CustomerDueSummary) => {
-    if (!canManage) {
-      showToast(
-        language === 'bn'
-          ? 'শুধুমাত্র এডমিন বা ম্যানেজার বাকি আদায় এন্ট্রি করতে পারেন'
-          : 'Only Admin or Manager can collect due payments',
-        'warning'
-      );
-      return;
-    }
     setCollectingCustomer(dueSummary);
     setCollectMode('full');
     setCollectAmount(String(dueSummary.totalDue));
+    setCollectDate(new Date().toISOString().split('T')[0]);
     setCollectPaymentMethod('নগদ');
     setCollectNotes('');
   };
@@ -109,16 +109,6 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
   const handleConfirmCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !targetId || !collectingCustomer) return;
-
-    if (!canManage) {
-      showToast(
-        language === 'bn'
-          ? 'শুধুমাত্র এডমিন বা ম্যানেজার বাকি আদায় করতে পারেন'
-          : 'Only Admin or Manager can collect dues',
-        'warning'
-      );
-      return;
-    }
 
     const amountNum = parseFloat(collectAmount);
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -146,7 +136,8 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
         collectingCustomer.sales,
         amountNum,
         collectPaymentMethod,
-        collectNotes.trim()
+        collectNotes.trim(),
+        collectDate || new Date().toISOString().split('T')[0]
       );
 
       // Celebrate collection!
@@ -184,79 +175,81 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
 
   return (
     <div className="space-y-4 pb-4">
-      {/* 4 Segmented Accounting Sub-Tabs */}
-      <div className="bg-slate-100/90 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/80 shadow-xs overflow-x-auto">
-        <button
-          onClick={() => setActiveSubTab('customer')}
-          className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
-            activeSubTab === 'customer'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-          <span className="truncate">{language === 'bn' ? 'কাস্টমার পাওনা' : 'Customer'}</span>
-          {customerDues.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500 text-white">
-              {formatNumber(customerDues.length, language)}
-            </span>
-          )}
-        </button>
+      {/* Accounting Sub-Tabs: Hidden for employees/viewers to preserve privacy */}
+      {!isViewer && (
+        <div className="bg-slate-100/90 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/80 shadow-xs overflow-x-auto">
+          <button
+            onClick={() => setActiveSubTab('customer')}
+            className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
+              activeSubTab === 'customer'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+            <span className="truncate">{language === 'bn' ? 'কাস্টমার পাওনা' : 'Customer'}</span>
+            {customerDues.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500 text-white">
+                {formatNumber(customerDues.length, language)}
+              </span>
+            )}
+          </button>
 
-        <button
-          onClick={() => setActiveSubTab('supplier')}
-          className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
-            activeSubTab === 'supplier'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <Building2 className="w-3.5 h-3.5 text-rose-600" />
-          <span className="truncate">{language === 'bn' ? 'পাইকার দেনা' : 'Supplier'}</span>
-          {supplierDues.filter((d) => d.dueAmount > 0).length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-rose-500 text-white">
-              {formatNumber(
-                supplierDues.filter((d) => d.dueAmount > 0).length,
-                language
-              )}
-            </span>
-          )}
-        </button>
+          <button
+            onClick={() => setActiveSubTab('supplier')}
+            className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
+              activeSubTab === 'supplier'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5 text-rose-600" />
+            <span className="truncate">{language === 'bn' ? 'পাইকার দেনা' : 'Supplier'}</span>
+            {supplierDues.filter((d) => d.dueAmount > 0).length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-rose-500 text-white">
+                {formatNumber(
+                  supplierDues.filter((d) => d.dueAmount > 0).length,
+                  language
+                )}
+              </span>
+            )}
+          </button>
 
-        <button
-          onClick={() => setActiveSubTab('expenses')}
-          className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
-            activeSubTab === 'expenses'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <Receipt className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="truncate">{language === 'bn' ? 'খরচের খাতা' : 'Expenses'}</span>
-        </button>
+          <button
+            onClick={() => setActiveSubTab('expenses')}
+            className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
+              activeSubTab === 'expenses'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="truncate">{language === 'bn' ? 'খরচের খাতা' : 'Expenses'}</span>
+          </button>
 
-        <button
-          onClick={() => setActiveSubTab('partnership')}
-          className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
-            activeSubTab === 'partnership'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5 text-indigo-600" />
-          <span className="truncate">{language === 'bn' ? 'পার্টনারশিপ' : 'Partners'}</span>
-          {totalCapitalDue > 0 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-indigo-500 text-white">
-              বাকি
-            </span>
-          )}
-        </button>
-      </div>
+          <button
+            onClick={() => setActiveSubTab('partnership')}
+            className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
+              activeSubTab === 'partnership'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="truncate">{language === 'bn' ? 'পার্টনারশিপ' : 'Partners'}</span>
+            {totalCapitalDue > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-indigo-500 text-white">
+                বাকি
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
-      {/* Render Other Accounting Sub-Tabs */}
-      {activeSubTab === 'supplier' && <SupplierDuesTab />}
-      {activeSubTab === 'expenses' && <ExpensesTab />}
-      {activeSubTab === 'partnership' && <PartnershipTab />}
+      {/* Render Other Accounting Sub-Tabs only for Admin/Manager */}
+      {!isViewer && activeSubTab === 'supplier' && <SupplierDuesTab />}
+      {!isViewer && activeSubTab === 'expenses' && <ExpensesTab />}
+      {!isViewer && activeSubTab === 'partnership' && <PartnershipTab />}
 
       {/* Customer Dues Tab View */}
       {activeSubTab === 'customer' && (
@@ -461,6 +454,15 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
                                   {language === 'bn' ? 'আগে পরিশোধ:' : 'Paid:'} {formatCurrency(invoicePaid, language)}
                                 </div>
                               )}
+                              {sale.collectionDate && (
+                                <div className="text-[10px] text-blue-600 font-medium flex items-center gap-1 mt-0.5">
+                                  <Calendar className="w-3 h-3 text-blue-500" />
+                                  <span>
+                                    {language === 'bn' ? 'বাকি আদায়ের তারিখ:' : 'Collected on:'}{' '}
+                                    {formatBengaliDate(sale.collectionDate, language)}
+                                  </span>
+                                </div>
+                              )}
                             </div>
 
                             <div className="text-right shrink-0">
@@ -523,6 +525,24 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
             </div>
 
             <form onSubmit={handleConfirmCollection} className="space-y-4 overflow-y-auto pr-1 flex-1">
+              {/* Collection Date (বাকি আদায়ের তারিখ) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <span>
+                    {language === 'bn' ? 'বাকি আদায়ের তারিখ (Payment Received Date)' : 'Payment Received Date'}{' '}
+                    <span className="text-rose-500">*</span>
+                  </span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={collectDate}
+                  onChange={(e) => setCollectDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                />
+              </div>
+
               {/* Payment Mode (সম্পূর্ণ বা আংশিক) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">

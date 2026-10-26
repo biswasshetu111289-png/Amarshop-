@@ -137,6 +137,8 @@ export interface Sale {
   packagingPrice?: number;
   color?: string;
   notes?: string;
+  collectionDate?: string; // বাকি আদায়ের তারিখ (YYYY-MM-DD)
+  collectionNotes?: string; // বাকি আদায়ের সময় প্রদত্ত নোট বা ট্রানজেকশন আইডি
   createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;
 }
 

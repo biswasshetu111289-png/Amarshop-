@@ -860,11 +860,13 @@ export async function deleteSale(
 export async function markCustomerDuesAsPaid(
   targetId: string,
   customerSales: Sale[],
-  paymentMethod: string = 'নগদ'
+  paymentMethod: string = 'নগদ',
+  collectionDate?: string
 ): Promise<void> {
   if (customerSales.length === 0) return;
   const batch = writeBatch(db);
   const salesRef = getSalesCollection(targetId);
+  const effectiveDate = collectionDate || new Date().toISOString().split('T')[0];
 
   for (const s of customerSales) {
     const saleRef = doc(salesRef, s.id);
@@ -873,6 +875,7 @@ export async function markCustomerDuesAsPaid(
       paymentMethod: paymentMethod,
       paidAmount: Number(s.total),
       dueAmount: 0,
+      collectionDate: effectiveDate,
     });
   }
 
@@ -880,14 +883,15 @@ export async function markCustomerDuesAsPaid(
 }
 
 /**
- * Receive full or partial due payment from a customer with payment method tracking
+ * Receive full or partial due payment from a customer with payment method tracking and collection date
  */
 export async function collectCustomerDuePayment(
   targetId: string,
   customerSales: Sale[],
   amountPaid: number,
   paymentMethod: string = 'নগদ',
-  notes?: string
+  notes?: string,
+  collectionDate?: string
 ): Promise<{ paidTotal: number; remainingDue: number }> {
   if (customerSales.length === 0 || amountPaid <= 0) {
     return { paidTotal: 0, remainingDue: 0 };
@@ -895,6 +899,7 @@ export async function collectCustomerDuePayment(
 
   const batch = writeBatch(db);
   const salesRef = getSalesCollection(targetId);
+  const effectiveDate = collectionDate || new Date().toISOString().split('T')[0];
 
   // Sort sales oldest first (ascending date) to clear older debts first
   const sortedSales = [...customerSales].sort((a, b) => a.date.localeCompare(b.date));
@@ -918,7 +923,8 @@ export async function collectCustomerDuePayment(
         paymentMethod: paymentMethod,
         paidAmount: Number(s.total),
         dueAmount: 0,
-        ...(notes ? { notes: s.notes ? `${s.notes} | ${notes}` : notes } : {}),
+        collectionDate: effectiveDate,
+        ...(notes ? { notes: s.notes ? `${s.notes} | ${notes}` : notes, collectionNotes: notes } : { collectionNotes: '' }),
       });
     } else {
       // Partially clear this invoice
@@ -930,7 +936,8 @@ export async function collectCustomerDuePayment(
         paymentMethod: paymentMethod,
         paidAmount: newPaid,
         dueAmount: newDue,
-        ...(notes ? { notes: s.notes ? `${s.notes} | ${notes}` : notes } : {}),
+        collectionDate: effectiveDate,
+        ...(notes ? { notes: s.notes ? `${s.notes} | ${notes}` : notes, collectionNotes: notes } : { collectionNotes: '' }),
       });
       break;
     }

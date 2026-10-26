@@ -549,6 +549,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             packagingPrice: data.packagingPrice ? Number(data.packagingPrice) : 0,
             color: data.color || '',
             notes: data.notes || '',
+            collectionDate: data.collectionDate || '',
+            collectionNotes: data.collectionNotes || '',
             createdAt: data.createdAt,
           });
         });

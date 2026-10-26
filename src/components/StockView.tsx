@@ -640,9 +640,9 @@ export const StockView: React.FC = () => {
                 <tr>
                   <th className="py-3 px-3">{language === 'bn' ? 'প্রোডাক্টের বিবরণ' : 'Product Details'}</th>
                   <th className="py-3 px-2 text-center">{language === 'bn' ? 'স্টক' : 'Stock'}</th>
-                  <th className="py-3 px-2 text-right">{language === 'bn' ? 'ক্রয় মূল্য' : 'Buy Price'}</th>
+                  {!isViewer && <th className="py-3 px-2 text-right">{language === 'bn' ? 'ক্রয় মূল্য' : 'Buy Price'}</th>}
                   <th className="py-3 px-2 text-right">{language === 'bn' ? 'বিক্রয় মূল্য' : 'Sell Price'}</th>
-                  <th className="py-3 px-2 text-right">{language === 'bn' ? 'নিট লাভ' : 'Net Profit'}</th>
+                  {!isViewer && <th className="py-3 px-2 text-right">{language === 'bn' ? 'নিট লাভ' : 'Net Profit'}</th>}
                   {canManage && <th className="py-3 px-2.5 text-center">{language === 'bn' ? 'অ্যাকশন' : 'Action'}</th>}
                 </tr>
               </thead>
@@ -692,26 +692,30 @@ export const StockView: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="py-2.5 px-2 text-right font-medium text-slate-600 whitespace-nowrap">
-                        <div>{formatCurrency(p.buyPrice, language)}</div>
-                        {Boolean(p.packagingPrice && p.packagingPrice > 0) && (
-                          <div className="text-[10px] text-slate-400">
-                            +{language === 'bn' ? 'প্যাক ' : 'Pack '}{formatCurrency(p.packagingPrice!, language)}
-                          </div>
-                        )}
-                      </td>
+                      {!isViewer && (
+                        <td className="py-2.5 px-2 text-right font-medium text-slate-600 whitespace-nowrap">
+                          <div>{formatCurrency(p.buyPrice, language)}</div>
+                          {Boolean(p.packagingPrice && p.packagingPrice > 0) && (
+                            <div className="text-[10px] text-slate-400">
+                              +{language === 'bn' ? 'প্যাক ' : 'Pack '}{formatCurrency(p.packagingPrice!, language)}
+                            </div>
+                          )}
+                        </td>
+                      )}
                       <td className="py-2.5 px-2 text-right font-bold text-slate-900 whitespace-nowrap">
                         {formatCurrency(p.sellPrice, language)}
                       </td>
-                      <td className="py-2.5 px-2 text-right whitespace-nowrap">
-                        <span
-                          className={`font-bold ${
-                            unitProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                          }`}
-                        >
-                          {formatCurrency(unitProfit, language)}
-                        </span>
-                      </td>
+                      {!isViewer && (
+                        <td className="py-2.5 px-2 text-right whitespace-nowrap">
+                          <span
+                            className={`font-bold ${
+                              unitProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                            }`}
+                          >
+                            {formatCurrency(unitProfit, language)}
+                          </span>
+                        </td>
+                      )}
                       {canManage && (
                         <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1">

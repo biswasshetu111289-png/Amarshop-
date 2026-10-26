@@ -662,15 +662,11 @@ export const Header: React.FC = () => {
               className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 transition backdrop-blur flex items-center justify-center border border-white/20 shadow-sm text-yellow-300 relative overflow-hidden shrink-0"
               title="দোকান পরিবর্তন করুন"
             >
-              {currentShop?.logoUrl ? (
-                <img
-                  src={currentShop.logoUrl}
-                  alt={currentShop.name}
-                  className="w-full h-full object-cover rounded-xl"
-                />
-              ) : (
-                <Store className="w-5 h-5" />
-              )}
+              <img
+                src={currentShop?.logoUrl || '/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png'}
+                alt={currentShop?.name || 'My Business'}
+                className="w-full h-full object-cover rounded-xl"
+              />
               {pendingRequestsCount > 0 && isAdmin && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center border-2 border-indigo-700 animate-pulse">
                   {pendingRequestsCount}
@@ -1425,11 +1421,11 @@ export const Header: React.FC = () => {
 
                   <div className="bg-white/90 p-2.5 rounded-lg border border-indigo-100 flex items-start gap-3">
                     <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
-                      {currentShop.logoUrl ? (
-                        <img src={currentShop.logoUrl} alt={currentShop.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Store className="w-7 h-7 text-indigo-400" />
-                      )}
+                      <img
+                        src={currentShop.logoUrl || '/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png'}
+                        alt={currentShop.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div className="flex-1 space-y-1 text-[11px]">
                       <div className="flex items-center justify-between">

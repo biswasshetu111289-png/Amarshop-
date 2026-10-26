@@ -29,6 +29,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     currentShop,
     userRole,
     canManage,
+    isViewer,
     totalProductsCount,
     todaySalesAmount,
     totalDuesAmount,
@@ -65,18 +66,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* Welcome Banner / Today Overview with Current Shop Name */}
       <div className={`${bannerBgClass} rounded-2xl p-4 text-white shadow-md flex items-center justify-between transition-colors duration-300`} style={bannerStyle}>
         <div className="flex items-center gap-3">
-          {currentShop?.logoUrl && (
-            <div className="w-12 h-12 rounded-xl bg-white/20 border border-white/30 overflow-hidden shrink-0 shadow-sm">
-              <img
-                src={currentShop.logoUrl}
-                alt={currentShop.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
+          <div className="w-12 h-12 rounded-xl bg-white/20 border border-white/30 overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
+            <img
+              src={currentShop?.logoUrl || '/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png'}
+              alt={currentShop?.name || 'My Business'}
+              className="w-full h-full object-cover"
+            />
+          </div>
           <div>
             <div className="flex items-center gap-1.5 text-xs text-blue-200 font-medium">
-              {!currentShop?.logoUrl && <Store className="w-3.5 h-3.5" />}
               <span>{currentShop?.name || (language === 'bn' ? 'আমার দোকান' : 'My Shop')}</span>
               <span className="text-[10px] bg-white/20 px-1.5 py-0.2 rounded font-bold">
                 {roleText}
@@ -93,23 +91,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {canManage ? (
-          <button
-            onClick={() => onNavigate('sale')}
-            className="px-3.5 py-2 bg-white text-blue-800 hover:bg-blue-50 active:scale-95 text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 shrink-0"
-          >
-            <span>{language === 'bn' ? 'নতুন বিক্রি' : 'New Sale'}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        ) : (
-          <button
-            onClick={() => onNavigate('history')}
-            className="px-3.5 py-2 bg-white/20 text-white hover:bg-white/30 text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 shrink-0"
-          >
-            <span>{language === 'bn' ? 'বিক্রি দেখুন' : 'View Sales'}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <button
+          onClick={() => onNavigate('sale')}
+          className="px-3.5 py-2 bg-white text-blue-800 hover:bg-blue-50 active:scale-95 text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 shrink-0"
+        >
+          <span>{language === 'bn' ? 'নতুন বিক্রি' : 'New Sale'}</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {/* 4 Stat Cards in 2x2 Grid */}
@@ -185,41 +173,67 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Card 4: Actual Net Profit (একচুয়াল নিট লাভ) */}
-        <div
-          onClick={() => onNavigate('dues', 'expenses')}
-          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">
-              {language === 'bn' ? 'একচুয়াল নিট লাভ' : 'Actual Net Profit'}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition">
-              <TrendingUp className="w-4 h-4" />
+        {/* Card 4: Actual Net Profit (for Admin/Manager) or Today's Sales History (for Viewer) */}
+        {!isViewer ? (
+          <div
+            onClick={() => onNavigate('dues', 'expenses')}
+            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-500">
+                {language === 'bn' ? 'একচুয়াল নিট লাভ' : 'Actual Net Profit'}
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <div
+                className={`text-xl font-bold ${
+                  netProfitAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                }`}
+              >
+                {formatCurrency(netProfitAmount, language)}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                {totalExpensesAmount > 0
+                  ? language === 'bn'
+                    ? `খরচ বাদ দিয়ে আসল লাভ`
+                    : `After costs`
+                  : language === 'bn'
+                  ? 'বিক্রি ও খরচ সমন্বিত লাভ'
+                  : 'Revenue minus costs'}
+              </div>
             </div>
           </div>
-          <div className="mt-2">
-            <div
-              className={`text-xl font-bold ${
-                netProfitAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'
-              }`}
-            >
-              {formatCurrency(netProfitAmount, language)}
+        ) : (
+          <div
+            onClick={() => onNavigate('history')}
+            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition cursor-pointer group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-500">
+                {language === 'bn' ? 'মোট লেনদেন' : 'Total Transactions'}
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
+                <Receipt className="w-4 h-4" />
+              </div>
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-              {totalExpensesAmount > 0
-                ? language === 'bn'
-                  ? `খরচ বাদ দিয়ে আসল লাভ`
-                  : `After costs`
-                : language === 'bn'
-                ? 'বিক্রি ও খরচ সমন্বিত লাভ'
-                : 'Revenue minus costs'}
+            <div className="mt-2">
+              <div className="text-xl font-bold text-slate-800">
+                {formatNumber(sales.length, language)} {language === 'bn' ? 'টি' : 'records'}
+              </div>
+              <div className="text-[11px] text-blue-600 flex items-center gap-0.5 mt-0.5">
+                <span>{language === 'bn' ? 'বিক্রির খাতা দেখুন' : 'View sales history'}</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Accounting & Financial Health Hub (খরচ, পাইকার দেনা ও পার্টনারশিপ) */}
+      {/* Accounting & Financial Health Hub (শুধুমাত্র এডমিন ও ম্যানেজারের জন্য) */}
+      {!isViewer && (
       <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -301,6 +315,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Low Stock Alert Section */}
       <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-3">

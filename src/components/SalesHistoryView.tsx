@@ -427,7 +427,7 @@ export const SalesHistoryView: React.FC = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid ${isViewer ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
         <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[11px] text-slate-500 block">
@@ -445,26 +445,28 @@ export const SalesHistoryView: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[11px] text-slate-500 block">
-              {language === 'bn' ? 'ফিল্টারকৃত মোট লাভ' : 'Filtered Total Profit'}
-            </span>
-            <span
-              className={`text-base font-bold mt-0.5 block ${
-                filteredTotalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-              }`}
-            >
-              {formatCurrency(filteredTotalProfit, language)}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              {language === 'bn' ? 'মোট লাভ হিসাব' : 'Total Profit Calculation'}
-            </span>
+        {!isViewer && (
+          <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-500 block">
+                {language === 'bn' ? 'ফিল্টারকৃত মোট লাভ' : 'Filtered Total Profit'}
+              </span>
+              <span
+                className={`text-base font-bold mt-0.5 block ${
+                  filteredTotalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                }`}
+              >
+                {formatCurrency(filteredTotalProfit, language)}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {language === 'bn' ? 'মোট লাভ হিসাব' : 'Total Profit Calculation'}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4" />
+            </div>
           </div>
-          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <TrendingUp className="w-4 h-4" />
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Sales List Table */}

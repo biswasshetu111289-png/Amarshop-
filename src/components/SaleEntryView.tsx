@@ -77,15 +77,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
     e.preventDefault();
     if (!user || !targetId) return;
 
-    if (!canManage) {
-      showToast(
-        language === 'bn'
-          ? 'শুধুমাত্র এডমিন বা ম্যানেজার বিক্রি এন্ট্রি করতে পারেন'
-          : 'Only Admin or Manager can record sales',
-        'warning'
-      );
-      return;
-    }
+// Allowed for owners, managers, and store staff (viewers)
 
     if (!selectedProductId || !currentProduct) {
       showToast(
@@ -268,15 +260,15 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
 
   return (
     <div className="space-y-4 pb-4">
-      {/* Viewer Notice */}
+      {/* Staff / Sales Mode Banner */}
       {isViewer && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2.5 text-xs text-amber-800">
-          <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-2.5 text-xs text-blue-800">
+          <ShieldAlert className="w-4 h-4 text-blue-600 shrink-0" />
           <span>
-            <strong>{language === 'bn' ? 'ভিউয়ার মোড:' : 'Viewer Mode:'}</strong>{' '}
+            <strong>{language === 'bn' ? 'কর্মচারী / সেলস মোড:' : 'Staff / Sales Mode:'}</strong>{' '}
             {language === 'bn'
-              ? 'আপনি শুধুমাত্র বিক্রির হিসাব দেখতে পারবেন। নতুন বিক্রি এন্ট্রি করার জন্য ম্যানেজার বা এডমিন অনুমতি প্রয়োজন।'
-              : 'You can only view sales records. Admin or Manager permission is required to record new sales.'}
+              ? 'আপনি দোকানের প্রোডাক্ট বিক্রি এন্ট্রি করতে পারবেন এবং বর্তমান স্টক দেখতে পারবেন।'
+              : 'You can record sales and view current product inventory.'}
           </span>
         </div>
       )}
@@ -319,7 +311,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             </label>
             <select
               required
-              disabled={isViewer}
+              
               value={selectedProductId}
               onChange={(e) => setSelectedProductId(e.target.value)}
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs md:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white disabled:opacity-60"
@@ -387,7 +379,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 step="any"
                 required
                 min="0.01"
-                disabled={isViewer}
+                
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
                 placeholder="1"
@@ -405,7 +397,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 step="any"
                 required
                 min="0"
-                disabled={isViewer}
+                
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder={language === 'bn' ? 'রেট দিন' : 'Enter price'}
@@ -426,7 +418,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 <input
                   type="date"
                   required
-                  disabled={isViewer}
+                  
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white disabled:opacity-60"
@@ -442,7 +434,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
-                    disabled={isViewer}
+                    
                     onClick={() => {
                       setPayment('নগদ');
                       setPaidAmount('');
@@ -459,7 +451,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
 
                   <button
                     type="button"
-                    disabled={isViewer}
+                    
                     onClick={() => {
                       setPayment('আংশিক');
                       if (!paidAmount && totalAmount > 0) {
@@ -478,7 +470,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
 
                   <button
                     type="button"
-                    disabled={isViewer}
+                    
                     onClick={() => {
                       setPayment('বাকি');
                       setPaidAmount('');
@@ -519,7 +511,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                     <button
                       key={method.id}
                       type="button"
-                      disabled={isViewer}
+                      
                       onClick={() => setPaymentMethod(method.id)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
                         isSelected
@@ -606,7 +598,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  disabled={isViewer}
+                  
                   value={customer}
                   onChange={(e) => setCustomer(e.target.value)}
                   placeholder={
@@ -632,7 +624,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="tel"
-                  disabled={isViewer}
+                  
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   placeholder={language === 'bn' ? '০১৭xxxxxxxx (ঐচ্ছিক)' : '017xxxxxxxx (Optional)'}

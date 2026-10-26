@@ -186,8 +186,12 @@ export const AuthView: React.FC = () => {
 
       {/* Branding Header */}
       <div className="text-center mb-5 max-w-sm">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-xl shadow-blue-500/25 text-white mb-3">
-          <Store className="w-8 h-8" />
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-xl shadow-blue-500/25 overflow-hidden mb-3 border-2 border-white/20 bg-slate-900">
+          <img
+            src="/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png"
+            alt="My Business App Logo"
+            className="w-full h-full object-cover"
+          />
         </div>
         <h1
           className={`text-2xl font-bold tracking-wide transition-colors ${
