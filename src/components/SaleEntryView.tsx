@@ -6,10 +6,14 @@ import { useLanguage } from '../context/LanguageContext';
 import { createSale, batchImportSales } from '../services/storeService';
 import { formatCurrency, formatQty, getTodayString, toBengaliNumber, formatNumber, formatUnit } from '../utils/formatters';
 import { parseSaleCSV, ParsedSaleRow } from '../utils/csv';
-import { PaymentType, PAYMENT_METHODS } from '../types';
+import { PaymentType, PAYMENT_METHODS, Sale } from '../types';
+import { InvoiceModal } from './InvoiceModal';
 import confetti from 'canvas-confetti';
 import {
   ShoppingCart,
+  BookOpen,
+  Search,
+  Check,
   CheckCircle,
   FileSpreadsheet,
   Upload,
@@ -31,7 +35,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   onSuccessNavigate,
 }) => {
   const { user } = useAuth();
-  const { products, currentShop, canManage, isViewer } = useStore();
+  const { products, sales, customerDues, currentShop, canManage, isViewer } = useStore();
   const { showToast } = useToast();
   const { language, t } = useLanguage();
 
@@ -46,6 +50,71 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   const [customer, setCustomer] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showAddressBookModal, setShowAddressBookModal] = useState(false);
+  const [addressSearch, setAddressSearch] = useState("");
+  const [completedSaleForInvoice, setCompletedSaleForInvoice] = useState<Sale | null>(null);
+  const [addressNotice, setAddressNotice] = useState<string | null>(null);
+
+  // Address book compiled from all past sales & customer dues
+  const customerAddressBook = React.useMemo(() => {
+    const map = new Map<string, { name: string; phone: string; count: number; lastDate: string }>();
+    for (const s of sales) {
+      const name = s.customer?.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const existing = map.get(key);
+      const phone = s.customerPhone?.trim() || existing?.phone || "";
+      if (existing) {
+        existing.count += 1;
+        if (s.date > existing.lastDate) existing.lastDate = s.date;
+        if (!existing.phone && phone) existing.phone = phone;
+      } else {
+        map.set(key, { name, phone, count: 1, lastDate: s.date });
+      }
+    }
+    for (const d of customerDues) {
+      const name = d.customer?.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const existing = map.get(key);
+      if (existing) {
+        if (!existing.phone && d.phone) existing.phone = d.phone;
+      } else {
+        map.set(key, { name, phone: d.phone || "", count: d.sales.length, lastDate: d.lastDate });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [sales, customerDues]);
+
+  const selectCustomerFromBook = (c: { name: string; phone: string }) => {
+    setCustomer(c.name);
+    setCustomerPhone(c.phone || "");
+    setShowAddressBookModal(false);
+    if (c.phone) {
+      setAddressNotice('✅ "' + c.name + '" এর ফোন (' + c.phone + ') অটো-লোড হয়েছে!');
+    } else {
+      setAddressNotice('✅ "' + c.name + '" সিলেক্ট হয়েছে।');
+    }
+    setTimeout(() => setAddressNotice(null), 4000);
+  };
+
+  const handleDeviceContactPicker = async () => {
+    if (typeof navigator !== "undefined" && "contacts" in navigator && "ContactsManager" in window) {
+      try {
+        const contacts = await (navigator as any).contacts.select(["name", "tel"], { multiple: false });
+        if (contacts && contacts.length > 0) {
+          const picked = contacts[0];
+          const name = picked.name?.[0] || "";
+          const phone = picked.tel?.[0] || "";
+          if (name) setCustomer(name);
+          if (phone) setCustomerPhone(phone);
+          showToast("কন্টাক্ট থেকে সফলভাবে সিলেক্ট হয়েছে", "success");
+        }
+      } catch (e) {
+        console.warn("Contact pick error/cancel:", e);
+      }
+    }
+  };
 
   // CSV Import State
   const [showCSVModal, setShowCSVModal] = useState(false);
@@ -163,7 +232,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           : parseFloat(paidAmount) || 0;
       const finalDueAmount = Math.max(0, totalAmount - finalPaidAmount);
 
-      await createSale(targetId, {
+      const newSaleId = await createSale(targetId, {
         productId: currentProduct.id,
         productName: currentProduct.name,
         qty: saleQty,
@@ -181,6 +250,25 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         color: currentProduct.color || '',
       });
 
+      const newSaleRecord: Sale = {
+        id: newSaleId || ("sale_" + Date.now()),
+        productId: currentProduct.id,
+        productName: currentProduct.name,
+        qty: saleQty,
+        unit: currentProduct.unit,
+        price: salePrice,
+        total: totalAmount,
+        date,
+        payment,
+        paymentMethod: paymentMethod || 'নগদ',
+        paidAmount: finalPaidAmount,
+        dueAmount: finalDueAmount,
+        customer: customer.trim(),
+        customerPhone: customerPhone.trim(),
+        packagingPrice: currentProduct.packagingPrice || 0,
+        color: currentProduct.color || '',
+      };
+
       // Joyful confetti for successful sale!
       confetti({
         particleCount: 60,
@@ -195,7 +283,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         'success'
       );
 
-      // Reset form
+      // Reset form fields
       setSelectedProductId('');
       setQty('1');
       setPrice('');
@@ -205,9 +293,8 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
       setPaymentMethod('নগদ');
       setPaidAmount('');
 
-      if (onSuccessNavigate) {
-        onSuccessNavigate();
-      }
+      // Immediately launch the Invoice Modal with WhatsApp share!
+      setCompletedSaleForInvoice(newSaleRecord);
     } catch (err) {
       console.error(err);
       showToast(
@@ -575,61 +662,99 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             )}
           </div>
 
-          {/* Customer Name & Optional Phone Number */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                {language === 'bn' ? 'কাস্টমারের নাম' : 'Customer Name'}{' '}
+          {/* Customer Name & Address Book Selection */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700">
+                {language === 'bn' ? 'কাস্টমারের তথ্য (নাম ও ফোন)' : 'Customer Details'}{' '}
                 {payment === 'বাকি' ? (
                   <span className="text-rose-500">
-                    {language === 'bn' ? '* (বাকির জন্য আবশ্যক)' : '* (Required for Due)'}
+                    {language === 'bn' ? '* (বাকির জন্য আবশ্যক)' : '* (Required)'}
                   </span>
                 ) : payment === 'আংশিক' ? (
                   <span className="text-blue-600">
-                    {language === 'bn' ? '* (বাকি রাখার জন্য আবশ্যক)' : '* (Required for Partial Due)'}
+                    {language === 'bn' ? '* (বাকি রাখার জন্য আবশ্যক)' : '* (Required)'}
                   </span>
                 ) : (
-                  <span className="text-slate-400">
+                  <span className="text-slate-400 font-normal">
                     {language === 'bn' ? '(ঐচ্ছিক)' : '(Optional)'}
                   </span>
                 )}
               </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  
-                  value={customer}
-                  onChange={(e) => setCustomer(e.target.value)}
-                  placeholder={
-                    payment === 'বাকি' || payment === 'আংশিক'
-                      ? (language === 'bn' ? 'কাস্টমারের নাম লিখুন (বাকি খাতায় যুক্ত হবে)' : 'Enter customer name (linked to due ledger)')
-                      : (language === 'bn' ? 'সাধারণ ক্রেতা (ঐচ্ছিক)' : 'Walk-in customer (optional)')
-                  }
-                  className={`w-full pl-9 pr-3 py-2 bg-slate-50 border rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:bg-white disabled:opacity-60 ${
-                    (payment === 'বাকি' || payment === 'আংশিক') && !customer.trim()
-                      ? 'border-amber-400 focus:ring-amber-500'
-                      : 'border-slate-300 focus:ring-blue-500'
-                  }`}
-                />
-              </div>
+
+              {/* Address Book Trigger Button */}
+              {customerAddressBook.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddressBookModal(true)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition flex items-center gap-1 border border-blue-200/60"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>{language === 'bn' ? 'এড্রেস বুক (' + customerAddressBook.length + ' জন)' : 'Address Book'}</span>
+                </button>
+              )}
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                <span>{language === 'bn' ? 'ফোন নম্বর' : 'Phone Number'}</span>
-                <span className="text-slate-400 font-normal">{language === 'bn' ? '(ঐচ্ছিক)' : '(Optional)'}</span>
-              </label>
-              <div className="relative">
-                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="tel"
-                  
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder={language === 'bn' ? '০১৭xxxxxxxx (ঐচ্ছিক)' : '017xxxxxxxx (Optional)'}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white disabled:opacity-60 font-mono"
-                />
+            {addressNotice && (
+              <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-1.5 animate-in fade-in">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{addressNotice}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    list="customer-suggestions"
+                    value={customer}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomer(val);
+                      // Auto-fill phone if matched exactly in address book
+                      const match = customerAddressBook.find(
+                        (c) => c.name.toLowerCase() === val.trim().toLowerCase()
+                      );
+                      if (match && match.phone) {
+                        setCustomerPhone(match.phone);
+                        setAddressNotice('✅ ফোন নম্বর অটো-লোড হয়েছে: ' + match.phone);
+                        setTimeout(() => setAddressNotice(null), 3000);
+                      }
+                    }}
+                    placeholder={
+                      payment === 'বাকি' || payment === 'আংশিক'
+                        ? (language === 'bn' ? 'কাস্টমারের নাম লিখুন বা এড্রেস বুক থেকে নিন' : 'Customer name')
+                        : (language === 'bn' ? 'নাম লিখুন বা এড্রেস বুক সিলেক্ট করুন' : 'Name (optional)')
+                    }
+                    className={`w-full pl-9 pr-3 py-2 bg-slate-50 border rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:bg-white disabled:opacity-60 ${
+                      (payment === 'বাকি' || payment === 'আংশিক') && !customer.trim()
+                        ? 'border-amber-400 focus:ring-amber-500'
+                        : 'border-slate-300 focus:ring-blue-500'
+                    }`}
+                  />
+                  <datalist id="customer-suggestions">
+                    {customerAddressBook.slice(0, 15).map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.phone ? c.phone : ""}
+                      </option>
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              <div>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder={language === 'bn' ? '০১৭xxxxxxxx (হোয়াটসঅ্যাপ / মেমো)' : '017xxxxxxxx'}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white disabled:opacity-60 font-mono"
+                  />
+                </div>
               </div>
             </div>
           </div>

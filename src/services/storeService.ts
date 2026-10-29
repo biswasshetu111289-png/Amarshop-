@@ -710,7 +710,7 @@ export async function createSale(
     color?: string;
     notes?: string;
   }
-): Promise<void> {
+): Promise<string> {
   const batch = writeBatch(db);
 
   // 1. New sale doc
@@ -745,6 +745,7 @@ export async function createSale(
   }
 
   await batch.commit();
+  return newSaleDoc.id;
 }
 
 /**
@@ -1215,11 +1216,19 @@ export async function addExpense(
 ): Promise<string> {
   const colRef = getExpensesCollection(targetId);
   const docRef = doc(colRef);
-  await setDoc(docRef, {
-    ...expense,
+  const payload: Record<string, any> = {
+    title: (expense.title || "").trim(),
     amount: Number(expense.amount) || 0,
+    category: expense.category || "অন্যান্য খরচ",
+    date: expense.date || new Date().toISOString().split("T")[0],
+    paidBy: (expense.paidBy || "").trim(),
+    notes: (expense.notes || "").trim(),
     createdAt: serverTimestamp(),
-  });
+  };
+  if (expense.supplierDueId) {
+    payload.supplierDueId = expense.supplierDueId;
+  }
+  await setDoc(docRef, payload);
   return docRef.id;
 }
 
@@ -1233,10 +1242,14 @@ export async function updateExpense(
 ): Promise<void> {
   const colRef = getExpensesCollection(targetId);
   const docRef = doc(colRef, expenseId);
-  const updatePayload: Record<string, any> = { ...data };
-  if (data.amount !== undefined) {
-    updatePayload.amount = Number(data.amount) || 0;
-  }
+  const updatePayload: Record<string, any> = {};
+  if (data.title !== undefined) updatePayload.title = data.title.trim();
+  if (data.amount !== undefined) updatePayload.amount = Number(data.amount) || 0;
+  if (data.category !== undefined) updatePayload.category = data.category;
+  if (data.date !== undefined) updatePayload.date = data.date;
+  if (data.paidBy !== undefined) updatePayload.paidBy = (data.paidBy || "").trim();
+  if (data.notes !== undefined) updatePayload.notes = (data.notes || "").trim();
+  if (data.supplierDueId !== undefined) updatePayload.supplierDueId = data.supplierDueId;
   await updateDoc(docRef, updatePayload);
 }
 

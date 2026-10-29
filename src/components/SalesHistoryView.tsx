@@ -4,6 +4,8 @@ import { useStore } from '../context/StoreContext';
 import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
 import { deleteSale, editSale } from '../services/storeService';
+import { SaleDetailsModal } from './SaleDetailsModal';
+import { InvoiceModal } from './InvoiceModal';
 import {
   formatCurrency,
   formatQty,
@@ -62,6 +64,8 @@ export const SalesHistoryView: React.FC = () => {
   const [editPackagingPrice, setEditPackagingPrice] = useState('');
   const [editColor, setEditColor] = useState('');
   const [updatingSale, setUpdatingSale] = useState(false);
+  const [detailSale, setDetailSale] = useState<Sale | null>(null);
+  const [invoiceSale, setInvoiceSale] = useState<Sale | null>(null);
 
   const targetId = currentShop?.id || user?.uid || '';
 
@@ -493,12 +497,12 @@ export const SalesHistoryView: React.FC = () => {
                   <th className="py-3 px-2 text-center">{language === 'bn' ? 'পরিমাণ' : 'Quantity'}</th>
                   <th className="py-3 px-2 text-right">{language === 'bn' ? 'মূল্য' : 'Amount'}</th>
                   <th className="py-3 px-2 text-center">{language === 'bn' ? 'পেমেন্ট' : 'Payment'}</th>
-                  {canManage && <th className="py-3 px-2 text-center">{language === 'bn' ? 'অ্যাকশন' : 'Action'}</th>}
+                  <th className="py-3 px-2 text-center">{language === 'bn' ? 'ইনভয়েস / অ্যাকশন' : 'Invoice / Action'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-slate-50/70 transition">
+                  <tr key={sale.id} onClick={() => setDetailSale(sale)} className="hover:bg-blue-50/60 cursor-pointer transition group">
                     <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 font-medium">
                       {formatBengaliDate(sale.date, language)}
                     </td>
@@ -557,32 +561,68 @@ export const SalesHistoryView: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    {canManage && (
-                      <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                    <td className="py-2.5 px-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => openEditModal(sale)}
-                            title={language === 'bn' ? 'বিক্রি এডিট / সংশোধন করুন' : 'Edit sale record'}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            onClick={() => setInvoiceSale(sale)}
+                            title={language === 'bn' ? 'ইনভয়েস ও হোয়াটসঅ্যাপে পাঠান' : 'Invoice & Share'}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Receipt className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(sale)}
-                            title={language === 'bn' ? 'বিক্রি মুছুন ও স্টক ফেরত নিন' : 'Delete sale & restore stock'}
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canManage && (
+                            <>
+                              <button
+                                onClick={() => openEditModal(sale)}
+                                title={language === 'bn' ? 'বিক্রি এডিট / সংশোধন করুন' : 'Edit sale record'}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(sale)}
+                                title={language === 'bn' ? 'বিক্রি মুছুন ও স্টক ফেরত নিন' : 'Delete sale & restore stock'}
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
-                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
+      )}
+
+      {/* Sale Details Modal */}
+      {detailSale && (
+        <SaleDetailsModal
+          sale={detailSale}
+          onClose={() => setDetailSale(null)}
+          onOpenInvoice={(s) => {
+            setDetailSale(null);
+            setInvoiceSale(s);
+          }}
+          onEdit={(s) => openEditModal(s)}
+          onDelete={(s) => handleDelete(s)}
+          canManage={canManage}
+        />
+      )}
+
+      {/* Invoice Modal */}
+      {invoiceSale && (
+        <InvoiceModal
+          sale={invoiceSale}
+          shopName={currentShop?.name}
+          shopPhone={currentShop?.phone}
+          shopAddress={currentShop?.address}
+          logoUrl={currentShop?.logoUrl}
+          onClose={() => setInvoiceSale(null)}
+        />
       )}
 
       {/* Edit Sale Modal (Admin & Manager Feature) */}

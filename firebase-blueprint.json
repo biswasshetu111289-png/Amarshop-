@@ -46,7 +46,12 @@
           "description": "Optional image URL or base64 data for shop logo"
         }
       },
-      "required": ["id", "name", "ownerId", "inviteCode"]
+      "required": [
+        "id",
+        "name",
+        "ownerId",
+        "inviteCode"
+      ]
     },
     "Product": {
       "title": "Product",
@@ -86,7 +91,12 @@
           "description": "Color variation"
         }
       },
-      "required": ["name", "qty", "buyPrice", "sellPrice"]
+      "required": [
+        "name",
+        "qty",
+        "buyPrice",
+        "sellPrice"
+      ]
     },
     "Sale": {
       "title": "Sale",
@@ -123,14 +133,167 @@
         },
         "payment": {
           "type": "string",
-          "description": "Payment type: cash or credit"
+          "description": "Payment type: cash, partial, or credit"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Method used: cash, bkash, nagad, etc."
+        },
+        "paidAmount": {
+          "type": "number",
+          "description": "Amount paid"
+        },
+        "dueAmount": {
+          "type": "number",
+          "description": "Outstanding due amount"
         },
         "customer": {
           "type": "string",
-          "description": "Customer name if credit"
+          "description": "Customer name"
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Customer phone number"
+        },
+        "collectionDate": {
+          "type": "string",
+          "description": "Date when due was paid/collected"
+        },
+        "collectionNotes": {
+          "type": "string",
+          "description": "Notes on collection"
         }
       },
-      "required": ["productName", "qty", "price", "total", "date", "payment"]
+      "required": [
+        "productName",
+        "qty",
+        "price",
+        "total",
+        "date",
+        "payment"
+      ]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Daily business expenses such as rent, delivery fees, and utilities.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Expense description or name"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Expense amount"
+        },
+        "category": {
+          "type": "string",
+          "description": "Expense category"
+        },
+        "date": {
+          "type": "string",
+          "description": "Expense date"
+        },
+        "paidBy": {
+          "type": "string",
+          "description": "Person or account that paid"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes"
+        }
+      },
+      "required": [
+        "title",
+        "amount",
+        "category",
+        "date"
+      ]
+    },
+    "PartnerInvestor": {
+      "title": "PartnerInvestor",
+      "description": "Partners and capital investors in the store.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Partner/Investor name"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone"
+        },
+        "role": {
+          "type": "string",
+          "description": "partner or investor"
+        },
+        "committedAmount": {
+          "type": "number",
+          "description": "Agreed target capital"
+        },
+        "paidAmount": {
+          "type": "number",
+          "description": "Contributed capital"
+        },
+        "dueAmount": {
+          "type": "number",
+          "description": "Unpaid committed capital"
+        },
+        "profitShareRatio": {
+          "type": "number",
+          "description": "Profit share percentage"
+        }
+      },
+      "required": [
+        "name",
+        "committedAmount",
+        "paidAmount"
+      ]
+    },
+    "SupplierDue": {
+      "title": "SupplierDue",
+      "description": "Wholesaler or supplier accounts payable records.",
+      "type": "object",
+      "properties": {
+        "supplierName": {
+          "type": "string",
+          "description": "Wholesaler/Supplier name"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone"
+        },
+        "invoiceNo": {
+          "type": "string",
+          "description": "Challan / Invoice number"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total purchase bill"
+        },
+        "paidAmount": {
+          "type": "number",
+          "description": "Amount paid"
+        },
+        "dueAmount": {
+          "type": "number",
+          "description": "Remaining debt owed"
+        },
+        "purchaseDate": {
+          "type": "string",
+          "description": "Date of stock purchase"
+        },
+        "status": {
+          "type": "string",
+          "description": "due, partial, or paid"
+        }
+      },
+      "required": [
+        "supplierName",
+        "totalAmount",
+        "paidAmount",
+        "purchaseDate"
+      ]
     }
   },
   "firestore": {
@@ -151,6 +314,24 @@
         "$ref": "#/entities/Sale"
       },
       "description": "Sales records belonging to a shop."
+    },
+    "/shops/{shopId}/expenses/{expenseId}": {
+      "schema": {
+        "$ref": "#/entities/Expense"
+      },
+      "description": "Daily business expenses collection."
+    },
+    "/shops/{shopId}/partners/{partnerId}": {
+      "schema": {
+        "$ref": "#/entities/PartnerInvestor"
+      },
+      "description": "Partners and investors capital ledger."
+    },
+    "/shops/{shopId}/supplierDues/{supplierDueId}": {
+      "schema": {
+        "$ref": "#/entities/SupplierDue"
+      },
+      "description": "Wholesaler and supplier debts ledger."
     }
   }
 }

@@ -31,6 +31,7 @@ export const ExpensesTab: React.FC = () => {
     netProfitAmount,
     sales,
     isAdmin,
+    canManage,
     addExpense,
     updateExpense,
     deleteExpense,
@@ -114,8 +115,8 @@ export const ExpensesTab: React.FC = () => {
 
   // Open Add Modal
   const openAddModal = () => {
-    if (!isAdmin) {
-      showToast('শুধুমাত্র প্রধান এডমিন খরচ যোগ করতে পারেন', 'warning');
+    if (!canManage) {
+      showToast('শুধুমাত্র এডমিন বা ম্যানেজার খরচ যোগ করতে পারেন', 'warning');
       return;
     }
     setTitle('');
@@ -129,8 +130,8 @@ export const ExpensesTab: React.FC = () => {
 
   // Open Edit Modal
   const openEditModal = (exp: Expense) => {
-    if (!isAdmin) {
-      showToast('শুধুমাত্র প্রধান এডমিন খরচ এডিট করতে পারেন', 'warning');
+    if (!canManage) {
+      showToast('শুধুমাত্র এডমিন বা ম্যানেজার খরচ এডিট করতে পারেন', 'warning');
       return;
     }
     setSelectedExpense(exp);
@@ -163,8 +164,8 @@ export const ExpensesTab: React.FC = () => {
         amount: amt,
         category,
         date,
-        paidBy: paidBy.trim() || undefined,
-        notes: notes.trim() || undefined,
+        paidBy: paidBy.trim(),
+        notes: notes.trim(),
       });
       showToast('খরচ সফলভাবে যোগ করা হয়েছে', 'success');
       setShowAddModal(false);
@@ -196,8 +197,8 @@ export const ExpensesTab: React.FC = () => {
         amount: amt,
         category,
         date,
-        paidBy: paidBy.trim() || undefined,
-        notes: notes.trim() || undefined,
+        paidBy: paidBy.trim(),
+        notes: notes.trim(),
       });
       showToast('খরচের তথ্য আপডেট করা হয়েছে', 'success');
       setShowEditModal(false);
@@ -227,7 +228,7 @@ export const ExpensesTab: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Read-Only Notice for Non-Admin */}
-      {!isAdmin && (
+      {!canManage && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-amber-800 flex items-center gap-2.5 text-xs">
           <Lock className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
@@ -385,7 +386,7 @@ export const ExpensesTab: React.FC = () => {
           </p>
         </div>
 
-        {isAdmin && (
+        {canManage && (
           <button
             onClick={openAddModal}
             className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5"
@@ -480,7 +481,7 @@ export const ExpensesTab: React.FC = () => {
                 : 'Log daily costs to calculate accurate net profit margin.'}
             </p>
           </div>
-          {isAdmin && (
+          {canManage && (
             <button
               onClick={openAddModal}
               className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow transition inline-flex items-center gap-1.5"
@@ -527,7 +528,7 @@ export const ExpensesTab: React.FC = () => {
                   -{formatCurrency(exp.amount, language)}
                 </span>
 
-                {isAdmin && (
+                {canManage && (
                   <div className="flex items-center gap-0.5">
                     <button
                       onClick={() => openEditModal(exp)}

@@ -35,6 +35,7 @@ export const PartnershipTab: React.FC = () => {
     totalCapitalDue,
     netProfitAmount,
     isAdmin,
+    canManage,
     addPartnerInvestor,
     updatePartnerInvestor,
     addCapitalPayment,
@@ -73,7 +74,7 @@ export const PartnershipTab: React.FC = () => {
 
   // Open Add Modal
   const openAddModal = () => {
-    if (!isAdmin) {
+    if (!canManage) {
       showToast('শুধুমাত্র প্রধান এডমিন পার্টনার যোগ করতে পারেন', 'warning');
       return;
     }
@@ -91,7 +92,7 @@ export const PartnershipTab: React.FC = () => {
 
   // Open Edit Modal
   const openEditModal = (p: PartnerInvestor) => {
-    if (!isAdmin) {
+    if (!canManage) {
       showToast('শুধুমাত্র প্রধান এডমিন পার্টনার তথ্য এডিট করতে পারেন', 'warning');
       return;
     }
@@ -108,7 +109,7 @@ export const PartnershipTab: React.FC = () => {
 
   // Open Capital Payment Modal (আংশিক/বকেয়া মূলধন জমা)
   const openCapitalModal = (p: PartnerInvestor) => {
-    if (!isAdmin) {
+    if (!canManage) {
       showToast('শুধুমাত্র প্রধান এডমিন মূলধন কিস্তি জমা এন্ট্রি করতে পারেন', 'warning');
       return;
     }
@@ -235,6 +236,19 @@ export const PartnershipTab: React.FC = () => {
     }
   };
 
+  // Quick Add Investment / Capital handler
+  const handleQuickAddInvestment = () => {
+    if (partners.length === 0) {
+      openAddModal();
+    } else if (partners.length === 1) {
+      openCapitalModal(partners[0]);
+    } else {
+      // Pick first partner or one with dues
+      const withDue = partners.find(p => p.dueAmount > 0) || partners[0];
+      openCapitalModal(withDue);
+    }
+  };
+
   // Find partners with dues to calculate Inter-Partner Due balance
   const partnersWithDues = partners.filter((p) => p.dueAmount > 0);
   const fullyPaidPartners = partners.filter((p) => p.dueAmount <= 0 && p.committedAmount > 0);
@@ -242,7 +256,7 @@ export const PartnershipTab: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Read-Only Notice for Non-Admin */}
-      {!isAdmin && (
+      {!canManage && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-amber-800 flex items-center gap-2.5 text-xs">
           <Lock className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
@@ -410,14 +424,25 @@ export const PartnershipTab: React.FC = () => {
           </p>
         </div>
 
-        {isAdmin && (
-          <button
-            onClick={openAddModal}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>{language === 'bn' ? 'নতুন পার্টনার যোগ' : 'Add Partner'}</span>
-          </button>
+        {canManage && (
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleQuickAddInvestment}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5"
+              title="নতুন মূলধন বা ইনভেস্টমেন্ট জমা এন্ট্রি করুন"
+            >
+              <Coins className="w-4 h-4" />
+              <span>{language === 'bn' ? 'নতুন ইনভেস্টমেন্ট জমা' : 'Add Capital'}</span>
+            </button>
+
+            <button
+              onClick={openAddModal}
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{language === 'bn' ? 'নতুন পার্টনার' : 'Add Partner'}</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -437,7 +462,7 @@ export const PartnershipTab: React.FC = () => {
                 : 'Add partners, committed investments, and track capital dues and profit distribution.'}
             </p>
           </div>
-          {isAdmin && (
+          {canManage && (
             <button
               onClick={openAddModal}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition inline-flex items-center gap-2"
@@ -515,7 +540,7 @@ export const PartnershipTab: React.FC = () => {
                     </div>
 
                     {/* Admin Action Menu */}
-                    {isAdmin && (
+                    {canManage && (
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => openEditModal(partner)}
@@ -631,7 +656,7 @@ export const PartnershipTab: React.FC = () => {
 
                   {/* Actions Bar: Add Capital installment button & Expand contributions button */}
                   <div className="flex items-center justify-between pt-1">
-                    {isAdmin && (
+                    {canManage && (
                       <button
                         onClick={() => openCapitalModal(partner)}
                         className={`px-3 py-1.5 text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 ${
