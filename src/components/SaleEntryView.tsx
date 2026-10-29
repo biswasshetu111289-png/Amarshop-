@@ -12,6 +12,7 @@ import confetti from 'canvas-confetti';
 import {
   ShoppingCart,
   BookOpen,
+  Contact,
   Search,
   Check,
   CheckCircle,
@@ -98,22 +99,118 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
     setTimeout(() => setAddressNotice(null), 4000);
   };
 
-  const handleDeviceContactPicker = async () => {
-    if (typeof navigator !== "undefined" && "contacts" in navigator && "ContactsManager" in window) {
+  // Saved phone contacts state (cached in localStorage)
+  const [phoneContacts, setPhoneContacts] = useState<{ name: string; phone: string }[]>(() => {
+    try {
+      const saved = localStorage.getItem("amar_shop_phone_contacts");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [showPhoneContactModal, setShowPhoneContactModal] = useState(false);
+  const [phoneContactSearch, setPhoneContactSearch] = useState("");
+  const phoneVcfInputRef = useRef<HTMLInputElement>(null);
+
+  // Save phone contacts to localStorage
+  const savePhoneContactsList = (list: { name: string; phone: string }[]) => {
+    setPhoneContacts(list);
+    try {
+      localStorage.setItem("amar_shop_phone_contacts", JSON.stringify(list));
+    } catch (e) {
+      console.warn("Storage error:", e);
+    }
+  };
+
+  // Trigger Phone Contacts: Native Android / Mobile Contact Picker or Modal Fallback
+  const handleOpenPhoneContacts = async () => {
+    const hasNativePicker =
+      typeof navigator !== "undefined" &&
+      "contacts" in navigator &&
+      "ContactsManager" in window;
+
+    if (hasNativePicker) {
       try {
-        const contacts = await (navigator as any).contacts.select(["name", "tel"], { multiple: false });
+        const props = ["name", "tel"];
+        const contacts = await (navigator as any).contacts.select(props, { multiple: false });
         if (contacts && contacts.length > 0) {
           const picked = contacts[0];
-          const name = picked.name?.[0] || "";
-          const phone = picked.tel?.[0] || "";
+          const name = (picked.name?.[0] || "").trim();
+          let rawPhone = (picked.tel?.[0] || "").trim();
+          // Clean phone number (strip whitespace & hyphens)
+          const cleanPhone = rawPhone.replace(/[^\d+]/g, "");
           if (name) setCustomer(name);
-          if (phone) setCustomerPhone(phone);
-          showToast("কন্টাক্ট থেকে সফলভাবে সিলেক্ট হয়েছে", "success");
+          if (cleanPhone) setCustomerPhone(cleanPhone);
+
+          // Add to phone contacts cache
+          if (name) {
+            const updated = [{ name, phone: cleanPhone }, ...phoneContacts.filter(c => c.name !== name)].slice(0, 500);
+            savePhoneContactsList(updated);
+          }
+
+          setAddressNotice(`✅ ফোনের কন্টাক্ট থেকে "${name}" (${cleanPhone}) সিলেক্ট হয়েছে!`);
+          showToast(`ফোনের কন্টাক্ট থেকে "${name}" সিলেক্ট হয়েছে`, "success");
+          return;
         }
-      } catch (e) {
-        console.warn("Contact pick error/cancel:", e);
+      } catch (err: any) {
+        // User cancelled or browser rejected
+        console.warn("Native contact picker error/dismiss:", err);
       }
     }
+
+    // Fallback: Open Phone Contacts Modal
+    setShowPhoneContactModal(true);
+  };
+
+  // Parse imported .vcf (vCard) file from user's phone
+  const handleImportVCF = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = String(event.target?.result || "");
+      const cards = text.split(/BEGIN:VCARD/i);
+      const parsed: { name: string; phone: string }[] = [];
+
+      for (const card of cards) {
+        if (!card.trim()) continue;
+        let cName = "";
+        let cPhone = "";
+        const fnMatch = card.match(/FN[;:]([^\r\n]+)/i);
+        if (fnMatch) {
+          cName = fnMatch[1].replace(/.*:/, "").trim();
+        }
+        const telMatch = card.match(/TEL[^:]*:([^\r\n]+)/i);
+        if (telMatch) {
+          cPhone = telMatch[1].replace(/[^\d+]/g, "").trim();
+        }
+        if (cName) {
+          parsed.push({ name: cName, phone: cPhone });
+        }
+      }
+
+      if (parsed.length > 0) {
+        // Merge with existing
+        const map = new Map<string, string>();
+        for (const p of parsed) {
+          map.set(p.name, p.phone);
+        }
+        for (const p of phoneContacts) {
+          if (!map.has(p.name)) {
+            map.set(p.name, p.phone);
+          }
+        }
+        const merged = Array.from(map.entries()).map(([name, phone]) => ({ name, phone }));
+        savePhoneContactsList(merged);
+        showToast(`ফোন থেকে মোট ${parsed.length} টি কন্টাক্ট সফলভাবে ইমপোর্ট হয়েছে!`, "success");
+      } else {
+        showToast("কন্টাক্ট ফাইল থেকে কোনো নম্বর পাওয়া যায়নি", "warning");
+      }
+    };
+    reader.readAsText(file);
+    if (phoneVcfInputRef.current) phoneVcfInputRef.current.value = "";
   };
 
   // CSV Import State
@@ -682,17 +779,30 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 )}
               </label>
 
-              {/* Address Book Trigger Button */}
-              {customerAddressBook.length > 0 && (
+              {/* Contact Picker Action Buttons */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => setShowAddressBookModal(true)}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition flex items-center gap-1 border border-blue-200/60"
+                  onClick={handleOpenPhoneContacts}
+                  className="text-xs font-bold text-emerald-800 bg-emerald-100/90 hover:bg-emerald-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-emerald-300 shadow-xs cursor-pointer active:scale-95"
+                  title="আপনার মোবাইলের সেভ করা কন্টাক্ট লিস্ট থেকে কাস্টমার সিলেক্ট করুন"
                 >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>{language === 'bn' ? 'এড্রেস বুক (' + customerAddressBook.length + ' জন)' : 'Address Book'}</span>
+                  <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>{language === 'bn' ? '📱 ফোনের কন্টাক্ট' : 'Phone Contacts'}</span>
                 </button>
-              )}
+
+                {customerAddressBook.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddressBookModal(true)}
+                    className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 border border-slate-200"
+                    title="দোকানের আগের কাস্টমারদের তালিকা"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-slate-600" />
+                    <span>{language === 'bn' ? 'দোকানের কাস্টমার (' + customerAddressBook.length + ')' : 'Store Contacts'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {addressNotice && (
