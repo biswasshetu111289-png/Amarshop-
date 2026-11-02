@@ -77,6 +77,11 @@ export interface AutoBackupSnapshot {
   data: StoreBackupData;
 }
 
+export interface ProductColorVariant {
+  color: string;
+  qty?: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -87,7 +92,8 @@ export interface Product {
   category?: string;
   packagingPrice?: number; // প্যাকেজিং খরচ (৳)
   color?: string; // কালার অপশন (e.g. লাল, নীল, কালো ইত্যাদি)
-  colors?: string[];
+  colors?: string[]; // একাধিক কালারের তালিকা (যেমন: ['লাল', 'নীল', 'কালো'])
+  colorVariants?: ProductColorVariant[]; // প্রতি কালারের স্টক সংখ্যা
   createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;
 }
 
@@ -154,6 +160,7 @@ export interface CustomerDueSummary {
 // Expense & Cost Tracker Types (খরচের খাতা)
 // ---------------------------------------------
 export const EXPENSE_CATEGORIES = [
+  'টুলস, ডিসপ্লে ও সরঞ্জাম', // Business equipment, display boxes, store fixtures
   'দোকান ভাড়া',
   'কর্মচারী বেতন',
   'বিদ্যুৎ ও ইউটিলিটি',

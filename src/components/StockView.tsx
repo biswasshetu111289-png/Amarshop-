@@ -84,6 +84,8 @@ export const StockView: React.FC = () => {
   const [formCategory, setFormCategory] = useState('');
   const [formPackagingPrice, setFormPackagingPrice] = useState('');
   const [formColor, setFormColor] = useState('');
+  const [formColors, setFormColors] = useState<string[]>([]);
+  const [customColorInput, setCustomColorInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // AI Auto-Categorize State
@@ -234,6 +236,8 @@ export const StockView: React.FC = () => {
     setFormCategory('');
     setFormPackagingPrice('');
     setFormColor('');
+    setFormColors([]);
+    setCustomColorInput('');
     setAiSuggestedCat(null);
     setIsCategoryManuallyEdited(false);
     setShowAddModal(true);
@@ -254,6 +258,13 @@ export const StockView: React.FC = () => {
     setFormCategory(product.category || '');
     setFormPackagingPrice(product.packagingPrice ? String(product.packagingPrice) : '');
     setFormColor(product.color || '');
+    const initialColors = product.colors && product.colors.length > 0
+      ? product.colors
+      : product.color
+      ? product.color.split(',').map((c) => c.trim()).filter(Boolean)
+      : [];
+    setFormColors(initialColors);
+    setCustomColorInput('');
     setAiSuggestedCat(null);
     setIsCategoryManuallyEdited(Boolean(product.category && product.category.trim()));
     setShowAddModal(true);
@@ -290,6 +301,13 @@ export const StockView: React.FC = () => {
       return;
     }
 
+    // Build colors list
+    const finalColors = formColors.length > 0
+      ? formColors
+      : formColor.trim()
+      ? formColor.split(',').map((c) => c.trim()).filter(Boolean)
+      : [];
+
     setSubmitting(true);
     try {
       await saveProduct(targetId, {
@@ -301,7 +319,8 @@ export const StockView: React.FC = () => {
         sellPrice,
         category: formCategory.trim(),
         packagingPrice: isNaN(packagingPrice) ? 0 : packagingPrice,
-        color: formColor.trim(),
+        color: finalColors.join(', '),
+        colors: finalColors,
       });
 
       showToast(
@@ -662,12 +681,22 @@ export const StockView: React.FC = () => {
                               {p.category}
                             </span>
                           )}
-                          {p.color && (
+                          {(p.colors && p.colors.length > 0) ? (
+                            p.colors.map((c) => (
+                              <span
+                                key={c}
+                                className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200/60 px-1.5 py-0.2 rounded font-medium flex items-center gap-1"
+                              >
+                                <Palette className="w-2.5 h-2.5 text-purple-600" />
+                                {c}
+                              </span>
+                            ))
+                          ) : p.color ? (
                             <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200/60 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
                               <Palette className="w-2.5 h-2.5 text-purple-600" />
                               {p.color}
                             </span>
-                          )}
+                          ) : null}
                           {Boolean(p.packagingPrice && p.packagingPrice > 0) && (
                             <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
                               <Package className="w-2.5 h-2.5 text-amber-600" />
@@ -1076,58 +1105,174 @@ export const StockView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Color Option */}
-                  <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-2xl space-y-2.5">
-                    <div className="flex items-center gap-2">
-                      <Palette className="w-4 h-4 text-purple-600" />
-                      <div>
-                        <h4 className="font-bold text-purple-900 text-xs">
-                          {language === 'bn' ? 'কালার অপশন (Color Option)' : 'Color Option'}
-                        </h4>
-                        <p className="text-[10px] text-purple-700">
-                          {language === 'bn'
-                            ? 'পোশাক, জুতো, ইলেকট্রনিক্স বা পণ্যের রঙ নির্ধারণ করুন'
-                            : 'Specify variant color for clothing, gadgets or products'}
-                        </p>
+                  {/* Color Option (Multi-Color Selection) */}
+                  <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Palette className="w-4 h-4 text-purple-600" />
+                        <div>
+                          <h4 className="font-bold text-purple-900 text-xs">
+                            {language === 'bn' ? 'একাধিক কালার অপশন (Multi-Color Options)' : 'Color Variants'}
+                          </h4>
+                          <p className="text-[10px] text-purple-700">
+                            {language === 'bn'
+                              ? 'একই প্রোডাক্টের একাধিক রঙ থাকলে সবগুলো সিলেক্ট করুন (যেমন: ৩ পিস লাল, নীল, কালো)'
+                              : 'Select multiple colors for this product if you have multiple color variants'}
+                          </p>
+                        </div>
                       </div>
+                      {formColors.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormColors([]);
+                            setFormColor('');
+                          }}
+                          className="text-[10px] font-bold text-rose-600 hover:underline"
+                        >
+                          {language === 'bn' ? 'সব মুছুন' : 'Clear All'}
+                        </button>
+                      )}
                     </div>
 
-                    {/* Quick Palette Pills */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {COMMON_COLORS.map((col) => (
-                        <button
-                          key={col.name}
-                          type="button"
-                          onClick={() => setFormColor(col.name)}
-                          className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-                            formColor === col.name
-                              ? 'ring-2 ring-purple-600 ring-offset-1 shadow-xs bg-white text-purple-900 font-bold border border-purple-300'
-                              : 'bg-white/80 hover:bg-white text-slate-700 border border-slate-200'
-                          }`}
-                        >
-                          <span className={`w-3 h-3 rounded-full ${col.bg}`} />
-                          <span>{col.name}</span>
-                          {formColor === col.name && <Check className="w-3 h-3 text-purple-600" />}
-                        </button>
-                      ))}
+                    {/* Selected Color Chips */}
+                    {formColors.length > 0 && (
+                      <div className="p-2 bg-white rounded-xl border border-purple-200 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-purple-950">
+                          <span>
+                            {language === 'bn'
+                              ? `নির্বাচিত কালারসমূহ (${formColors.length}টি):`
+                              : `Selected Colors (${formColors.length}):`}
+                          </span>
+                          {formQty && (
+                            <span className="text-[10px] text-purple-700 font-normal">
+                              {language === 'bn' ? `স্টক: ${formQty} ${formUnit}` : `Stock: ${formQty} ${formUnit}`}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {formColors.map((colorName) => {
+                            const matchedCol = COMMON_COLORS.find((c) => c.name === colorName);
+                            return (
+                              <span
+                                key={colorName}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-100 text-purple-900 border border-purple-300 rounded-lg text-xs font-bold animate-in fade-in"
+                              >
+                                {matchedCol ? (
+                                  <span className={`w-2.5 h-2.5 rounded-full ${matchedCol.bg}`} />
+                                ) : (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                                )}
+                                <span>{colorName}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = formColors.filter((c) => c !== colorName);
+                                    setFormColors(next);
+                                    setFormColor(next.join(', '));
+                                  }}
+                                  className="text-purple-600 hover:text-rose-600 hover:bg-purple-200 rounded-full w-4 h-4 flex items-center justify-center text-xs ml-0.5"
+                                  title="বাদ দিন"
+                                >
+                                  ✕
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quick Palette Pills (Click to toggle/add multiple) */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        {language === 'bn'
+                          ? 'ক্লিক করে কালার সিলেক্ট করুন (একাধিক সিলেক্ট করা যাবে):'
+                          : 'Click to select colors (multiple allowed):'}
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {COMMON_COLORS.map((col) => {
+                          const isSelected = formColors.includes(col.name);
+                          return (
+                            <button
+                              key={col.name}
+                              type="button"
+                              onClick={() => {
+                                const next = isSelected
+                                  ? formColors.filter((c) => c !== col.name)
+                                  : [...formColors, col.name];
+                                setFormColors(next);
+                                setFormColor(next.join(', '));
+                              }}
+                              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                                isSelected
+                                  ? 'ring-2 ring-purple-600 bg-purple-600 text-white font-bold shadow-xs'
+                                  : 'bg-white hover:bg-purple-50 text-slate-700 border border-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`w-3 h-3 rounded-full ${col.bg} ${
+                                  isSelected ? 'ring-1 ring-white' : ''
+                                }`}
+                              />
+                              <span>{col.name}</span>
+                              {isSelected ? (
+                                <Check className="w-3 h-3 text-white" />
+                              ) : (
+                                <span className="text-[10px] text-slate-400">+</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Custom Color Input */}
                     <div className="pt-1">
                       <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        {language === 'bn' ? 'অথবা কাস্টম কালারের নাম লিখুন:' : 'Or enter custom color name:'}
+                        {language === 'bn' ? 'অথবা কাস্টম কালারের নাম লিখে যোগ করুন:' : 'Or type custom color and add:'}
                       </label>
-                      <input
-                        type="text"
-                        value={formColor}
-                        onChange={(e) => setFormColor(e.target.value)}
-                        placeholder={
-                          language === 'bn'
-                            ? 'যেমন: নেভি ব্লু, মেরুন, মেটালিক সিলভার ইত্যাদি'
-                            : 'e.g. Navy Blue, Maroon, Silver, etc.'
-                        }
-                        className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={customColorInput}
+                          onChange={(e) => setCustomColorInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = customColorInput.trim();
+                              if (val && !formColors.includes(val)) {
+                                const next = [...formColors, val];
+                                setFormColors(next);
+                                setFormColor(next.join(', '));
+                                setCustomColorInput('');
+                              }
+                            }
+                          }}
+                          placeholder={
+                            language === 'bn'
+                              ? 'যেমন: নেভি ব্লু, মেটালিক গোল্ড ইত্যাদি'
+                              : 'e.g. Navy Blue, Metallic Gold'
+                          }
+                          className="flex-1 px-3 py-2 bg-white border border-purple-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = customColorInput.trim();
+                            if (val && !formColors.includes(val)) {
+                              const next = [...formColors, val];
+                              setFormColors(next);
+                              setFormColor(next.join(', '));
+                              setCustomColorInput('');
+                            }
+                          }}
+                          disabled={!customColorInput.trim()}
+                          className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-40"
+                        >
+                          + {language === 'bn' ? 'যোগ করুন' : 'Add'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

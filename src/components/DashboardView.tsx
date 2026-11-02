@@ -1,8 +1,22 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { useStore } from '../context/StoreContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import { formatCurrency, formatQty, formatBengaliDate, formatNumber } from '../utils/formatters';
+import { useToast } from '../context/ToastContext';
+import { deleteSale, editSale } from '../services/storeService';
+import { SaleDetailsModal } from './SaleDetailsModal';
+import { InvoiceModal } from './InvoiceModal';
+import { Sale, ProductUnit, PaymentType, PAYMENT_METHODS } from '../types';
+import {
+  formatCurrency,
+  formatQty,
+  formatBengaliDate,
+  formatNumber,
+  formatUnit,
+  formatPaymentMethod,
+  getTodayString,
+} from '../utils/formatters';
 import {
   Package,
   TrendingUp,
@@ -16,6 +30,13 @@ import {
   Building2,
   Users,
   Coins,
+  Edit2,
+  Check,
+  X,
+  Palette,
+  User,
+  Phone,
+  BarChart3,
 } from 'lucide-react';
 import { NavTab } from './BottomNav';
 import { DuesSubTab } from './CreditDuesView';
@@ -25,11 +46,14 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
+  const { user } = useAuth();
+  const { showToast } = useToast();
   const {
     currentShop,
     userRole,
     canManage,
     isViewer,
+    products,
     totalProductsCount,
     todaySalesAmount,
     totalDuesAmount,
@@ -49,7 +73,191 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const { language, t } = useLanguage();
   const { activeTheme, themeId, customBg } = useTheme();
 
+  const targetId = currentShop?.id || user?.uid || '';
+
+  // Sale Modals State
+  const [detailSale, setDetailSale] = useState<Sale | null>(null);
+  const [invoiceSale, setInvoiceSale] = useState<Sale | null>(null);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+
+  // Edit Sale Form State
+  const [editQty, setEditQty] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editPayment, setEditPayment] = useState<PaymentType>('নগদ');
+  const [editPaymentMethod, setEditPaymentMethod] = useState<string>('নগদ');
+  const [editPaidAmount, setEditPaidAmount] = useState('');
+  const [editCustomer, setEditCustomer] = useState('');
+  const [editCustomerPhone, setEditCustomerPhone] = useState('');
+  const [editPackagingPrice, setEditPackagingPrice] = useState('');
+  const [editColor, setEditColor] = useState('');
+  const [updatingSale, setUpdatingSale] = useState(false);
+
+  // Calculations for Stock & Today's Cash/Due Breakdown
+  const availableStockQty = useMemo(() => {
+    return products.reduce((sum, p) => sum + (p.qty > 0 ? Number(p.qty) : 0), 0);
+  }, [products]);
+
+  const inStockProductsCount = useMemo(() => {
+    return products.filter((p) => p.qty > 0).length;
+  }, [products]);
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
+
+  const todayCashSales = useMemo(() => {
+    return sales
+      .filter((s) => s.date === todayStr)
+      .reduce((sum, s) => sum + (s.payment === 'নগদ' ? s.total : Number(s.paidAmount || 0)), 0);
+  }, [sales, todayStr]);
+
+  const todayDueSales = useMemo(() => {
+    return sales
+      .filter((s) => s.date === todayStr)
+      .reduce((sum, s) => sum + (s.payment === 'বাকি' ? s.total : Number(s.dueAmount || 0)), 0);
+  }, [sales, todayStr]);
+
   const recentSales = sales.slice(0, 5);
+
+  const openEditModal = (sale: Sale) => {
+    if (!canManage) {
+      showToast(
+        language === 'bn'
+          ? 'শুধুমাত্র এডমিন বা ম্যানেজার বিক্রির রেকর্ড সংশোধন করতে পারেন'
+          : 'Only Admin or Manager can edit sales records',
+        'warning'
+      );
+      return;
+    }
+    setDetailSale(null);
+    setEditingSale(sale);
+    setEditQty(String(sale.qty));
+    setEditPrice(String(sale.price));
+    setEditDate(sale.date || getTodayString());
+    setEditPayment(sale.payment || 'নগদ');
+    setEditPaymentMethod(sale.paymentMethod || 'নগদ');
+    setEditPaidAmount(
+      sale.paidAmount !== undefined
+        ? String(sale.paidAmount)
+        : String(sale.payment === 'নগদ' ? sale.total : 0)
+    );
+    setEditCustomer(sale.customer || '');
+    setEditCustomerPhone(sale.customerPhone || '');
+    setEditPackagingPrice(sale.packagingPrice ? String(sale.packagingPrice) : '');
+    setEditColor(sale.color || '');
+  };
+
+  const handleSaveEditSale = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !targetId || !editingSale) return;
+
+    const qtyNum = parseFloat(editQty);
+    const priceNum = parseFloat(editPrice);
+    const packPriceNum = editPackagingPrice ? parseFloat(editPackagingPrice) : 0;
+
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      showToast(language === 'bn' ? 'সঠিক বিক্রির পরিমাণ দিন' : 'Enter valid quantity', 'warning');
+      return;
+    }
+    if (isNaN(priceNum) || priceNum < 0) {
+      showToast(language === 'bn' ? 'সঠিক একক মূল্য দিন' : 'Enter valid unit price', 'warning');
+      return;
+    }
+
+    const totalAmount = qtyNum * priceNum;
+    let finalPaid = 0;
+    let finalDue = 0;
+
+    if (editPayment === 'নগদ') {
+      finalPaid = totalAmount;
+      finalDue = 0;
+    } else if (editPayment === 'বাকি') {
+      finalPaid = 0;
+      finalDue = totalAmount;
+    } else {
+      const parsedPaid = parseFloat(editPaidAmount) || 0;
+      finalPaid = parsedPaid;
+      finalDue = Math.max(0, totalAmount - parsedPaid);
+    }
+
+    setUpdatingSale(true);
+    try {
+      await editSale(
+        targetId,
+        editingSale.id,
+        {
+          productId: editingSale.productId,
+          productName: editingSale.productName,
+          qty: qtyNum,
+          unit: editingSale.unit,
+          price: priceNum,
+          total: totalAmount,
+          date: editDate,
+          payment: editPayment,
+          paymentMethod: editPaymentMethod || 'নগদ',
+          paidAmount: finalPaid,
+          dueAmount: finalDue,
+          customer: editCustomer.trim(),
+          customerPhone: editCustomerPhone.trim(),
+          packagingPrice: packPriceNum,
+          color: editColor.trim(),
+        },
+        editingSale
+      );
+
+      showToast(
+        language === 'bn'
+          ? 'বিক্রির রেকর্ড ও স্টক সফলভাবে আপডেট হয়েছে'
+          : 'Sale updated and stock adjusted successfully',
+        'success'
+      );
+      setEditingSale(null);
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'বিক্রি আপডেট করতে সমস্যা হয়েছে', 'error');
+    } finally {
+      setUpdatingSale(false);
+    }
+  };
+
+  const handleDeleteSale = async (sale: Sale) => {
+    if (!user || !targetId) return;
+    if (!canManage) {
+      showToast(
+        language === 'bn'
+          ? 'শুধুমাত্র এডমিন বা ম্যানেজার বিক্রির রেকর্ড মুছতে পারেন'
+          : 'Only Admin or Manager can delete sales records',
+        'warning'
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      language === 'bn'
+        ? `আপনি কি এই বিক্রির রেকর্ডটি মুছে ফেলতে চান? পণ্যটির স্টক (${sale.qty} ${sale.unit}) পুনরায় ফেরত যোগ করা হবে।`
+        : `Delete this sale record? Product stock will be replenished.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteSale(targetId, sale.id, sale.productId, sale.qty);
+      showToast(
+        language === 'bn'
+          ? 'বিক্রির রেকর্ড মুছে স্টক পুনরায় ফেরত দেওয়া হয়েছে'
+          : 'Sale deleted and stock restored',
+        'info'
+      );
+      setDetailSale(null);
+    } catch (err: any) {
+      console.error(err);
+      showToast('মুছতে সমস্যা হয়েছে', 'error');
+    }
+  };
 
   const roleText =
     userRole === 'admin'
@@ -105,47 +313,66 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         {/* Card 1: Total Products */}
         <div
           onClick={() => onNavigate('stock')}
-          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition cursor-pointer group"
+          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition cursor-pointer group flex flex-col justify-between"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">
-              {language === 'bn' ? 'মোট স্টক' : 'Total Stock'}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
-              <Package className="w-4 h-4" />
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-500">
+                {language === 'bn' ? 'মোট স্টক' : 'Total Stock'}
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
+                <Package className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <div className="text-xl font-bold text-slate-800">
+                {formatNumber(totalProductsCount, language)} {language === 'bn' ? 'টি পণ্য' : 'items'}
+              </div>
+              <div className="mt-1 flex items-center gap-1">
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">
+                  <span>{language === 'bn' ? 'এভেইলেবল স্টক:' : 'Available:'}</span>
+                  <span className="font-bold">{formatNumber(availableStockQty, language)} {language === 'bn' ? 'পিস' : 'pcs'}</span>
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-2">
-            <div className="text-xl font-bold text-slate-800">
-              {formatNumber(totalProductsCount, language)} {language === 'bn' ? 'টি' : ''}
-            </div>
-            <div className="text-[11px] text-blue-600 flex items-center gap-0.5 mt-0.5">
-              <span>{language === 'bn' ? 'স্টক তালিকা দেখুন' : 'View Stock'}</span>
-              <ArrowUpRight className="w-3 h-3" />
-            </div>
+          <div className="text-[11px] text-blue-600 flex items-center gap-0.5 mt-2 pt-1 border-t border-slate-100/60">
+            <span>{language === 'bn' ? 'স্টক তালিকা দেখুন' : 'View Stock'}</span>
+            <ArrowUpRight className="w-3 h-3" />
           </div>
         </div>
 
         {/* Card 2: Today's Sales */}
         <div
           onClick={() => onNavigate('history')}
-          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group"
+          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group flex flex-col justify-between"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">
-              {language === 'bn' ? 'আজকের সেল' : "Today's Sales"}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition">
-              <ShoppingBag className="w-4 h-4" />
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-500">
+                {language === 'bn' ? 'আজকের সেল' : "Today's Sales"}
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition">
+                <ShoppingBag className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <div className="text-xl font-bold text-emerald-600">
+                {formatCurrency(todaySalesAmount, language)}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+                <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                  {language === 'bn' ? 'নগদ:' : 'Cash:'} {formatCurrency(todayCashSales, language)}
+                </span>
+                <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                  {language === 'bn' ? 'বাকি সেল:' : 'Credit:'} {formatCurrency(todayDueSales, language)}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-2">
-            <div className="text-xl font-bold text-emerald-600">
-              {formatCurrency(todaySalesAmount, language)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">
-              {language === 'bn' ? 'আজকের মোট বিক্রি' : "Today's Total Sales"}
-            </div>
+          <div className="text-[11px] text-emerald-600 flex items-center gap-0.5 mt-2 pt-1 border-t border-slate-100/60">
+            <span>{language === 'bn' ? 'বিক্রির খাতা দেখুন' : 'View Sales'}</span>
+            <ArrowUpRight className="w-3 h-3" />
           </div>
         </div>
 
@@ -176,7 +403,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         {/* Card 4: Actual Net Profit (for Admin/Manager) or Today's Sales History (for Viewer) */}
         {!isViewer ? (
           <div
-            onClick={() => onNavigate('dues', 'expenses')}
+            onClick={() => onNavigate('dues', 'monthly_report')}
             className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group"
           >
             <div className="flex items-center justify-between">
@@ -314,6 +541,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           </div>
         </div>
+
+        {/* Hub Action: Monthly & Business Report */}
+        <div
+          onClick={() => onNavigate('dues', 'monthly_report')}
+          className="p-3 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 hover:border-blue-300 transition cursor-pointer flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+              <BarChart3 className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span>{language === 'bn' ? 'মাসিক ও সামগ্রিক ব্যবসায়িক রিপোর্ট' : 'Monthly & Business Report'}</span>
+                <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.2 rounded font-bold">
+                  {language === 'bn' ? 'চার্টসহ' : 'With Chart'}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500">
+                {language === 'bn' ? 'বিক্রি, খরচ ও নিট লাভের বার চার্ট ও আর্থিক পরিস্থিতি' : 'Sales, costs & net profit bar chart analysis'}
+              </div>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-blue-600 group-hover:translate-x-0.5 transition" />
+        </div>
       </div>
       )}
 
@@ -418,9 +669,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         ) : (
           <div className="divide-y divide-slate-100">
             {recentSales.map((s) => (
-              <div key={s.id} className="py-2.5 flex items-center justify-between text-xs">
+              <div
+                key={s.id}
+                onClick={() => setDetailSale(s)}
+                className="py-2.5 px-2 -mx-2 rounded-xl flex items-center justify-between text-xs hover:bg-blue-50/70 active:scale-[0.99] cursor-pointer transition group"
+                title={language === 'bn' ? 'বিস্তারিত ও এডিট করতে ক্লিক করুন' : 'Click to view details & edit'}
+              >
                 <div>
-                  <div className="font-semibold text-slate-900">{s.productName}</div>
+                  <div className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
+                    <span>{s.productName}</span>
+                    <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition">🔍</span>
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
                     <span>{formatBengaliDate(s.date, language)}</span>
                     <span>•</span>
@@ -457,6 +716,203 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
         )}
       </div>
+
+      {/* Sale Details Modal */}
+      {detailSale && (
+        <SaleDetailsModal
+          sale={detailSale}
+          onClose={() => setDetailSale(null)}
+          onOpenInvoice={(s) => {
+            setDetailSale(null);
+            setInvoiceSale(s);
+          }}
+          onEdit={(s) => openEditModal(s)}
+          onDelete={(s) => handleDeleteSale(s)}
+          canManage={canManage}
+        />
+      )}
+
+      {/* Invoice Modal */}
+      {invoiceSale && (
+        <InvoiceModal
+          sale={invoiceSale}
+          shopName={currentShop?.name}
+          shopPhone={currentShop?.phone}
+          shopAddress={currentShop?.address}
+          logoUrl={currentShop?.logoUrl}
+          onClose={() => setInvoiceSale(null)}
+        />
+      )}
+
+      {/* Edit Sale Modal */}
+      {editingSale && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
+            <div className="px-5 py-3.5 bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-blue-200" />
+                <h3 className="font-bold text-base">
+                  {language === 'bn' ? 'বিক্রির রেকর্ড সংশোধন' : 'Edit Sale Record'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingSale(null)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSale} className="p-5 space-y-4 overflow-y-auto">
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-slate-500 block">{language === 'bn' ? 'প্রোডাক্ট:' : 'Product:'}</span>
+                  <span className="font-bold text-slate-800 text-sm">{editingSale.productName}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-500 block">{language === 'bn' ? 'একক:' : 'Unit:'}</span>
+                  <span className="font-bold text-slate-800">{formatUnit(editingSale.unit, language)}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'পরিমাণ' : 'Quantity'} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    min="0.01"
+                    value={editQty}
+                    onChange={(e) => setEditQty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'একক মূল্য (৳)' : 'Unit Price (৳)'} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    min="0"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {language === 'bn' ? 'পেমেন্ট স্ট্যাটাস' : 'Payment Status'}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['নগদ', 'বাকি', 'আংশিক'] as PaymentType[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setEditPayment(p)}
+                      className={`py-2 text-xs font-bold rounded-xl border transition ${
+                        editPayment === p
+                          ? p === 'নগদ'
+                            ? 'bg-emerald-600 text-white border-emerald-600'
+                            : p === 'বাকি'
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-slate-50 border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {p === 'নগদ'
+                        ? (language === 'bn' ? 'নগদ' : 'Cash')
+                        : p === 'বাকি'
+                        ? (language === 'bn' ? 'বাকি' : 'Due')
+                        : (language === 'bn' ? 'আংশিক' : 'Partial')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {editPayment === 'আংশিক' && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
+                  <label className="text-xs font-bold text-blue-900">
+                    {language === 'bn' ? 'পরিশোধিত টাকা (Paid Amount ৳)' : 'Paid Amount (৳)'}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={editPaidAmount}
+                    onChange={(e) => setEditPaidAmount(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-blue-300 rounded-xl text-sm font-bold text-slate-900"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'ক্রেতার নাম' : 'Customer Name'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editCustomer}
+                    onChange={(e) => setEditCustomer(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                    placeholder="ক্রেতার নাম"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'ফোন নম্বর' : 'Phone Number'}
+                  </label>
+                  <input
+                    type="tel"
+                    value={editCustomerPhone}
+                    onChange={(e) => setEditCustomerPhone(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono"
+                    placeholder="017xxxxxxxx"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {language === 'bn' ? 'বিক্রির তারিখ' : 'Sale Date'}
+                </label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingSale(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition"
+                >
+                  {language === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingSale}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition disabled:opacity-50"
+                >
+                  {updatingSale ? 'সংরক্ষণ হচ্ছে...' : (language === 'bn' ? 'আপডেট করুন' : 'Save Changes')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -50,6 +50,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   const [paidAmount, setPaidAmount] = useState<string>('');
   const [customer, setCustomer] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [saleColor, setSaleColor] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showAddressBookModal, setShowAddressBookModal] = useState(false);
   const [addressSearch, setAddressSearch] = useState("");
@@ -229,10 +230,18 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   // Current selected product object
   const currentProduct = products.find((p) => p.id === selectedProductId);
 
-  // Auto-fill price and default values when product changes
+  // Auto-fill price, default color, and values when product changes
   useEffect(() => {
     if (currentProduct) {
       setPrice(String(currentProduct.sellPrice));
+      const pColors = currentProduct.colors && currentProduct.colors.length > 0
+        ? currentProduct.colors
+        : currentProduct.color
+        ? currentProduct.color.split(',').map((c) => c.trim()).filter(Boolean)
+        : [];
+      setSaleColor(pColors[0] || currentProduct.color || '');
+    } else {
+      setSaleColor('');
     }
   }, [selectedProductId, currentProduct]);
 
@@ -344,7 +353,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         customer: customer.trim(),
         customerPhone: customerPhone.trim(),
         packagingPrice: currentProduct.packagingPrice || 0,
-        color: currentProduct.color || '',
+        color: saleColor.trim() || currentProduct.color || '',
       });
 
       const newSaleRecord: Sale = {
@@ -363,7 +372,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         customer: customer.trim(),
         customerPhone: customerPhone.trim(),
         packagingPrice: currentProduct.packagingPrice || 0,
-        color: currentProduct.color || '',
+        color: saleColor.trim() || currentProduct.color || '',
       };
 
       // Joyful confetti for successful sale!
@@ -522,12 +531,47 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                     {formatQty(currentProduct.qty, currentProduct.unit, language)}
                   </span>
                 </div>
-                {currentProduct.color && (
-                  <div className="flex items-center gap-1 text-purple-700 font-medium">
-                    <Palette className="w-3 h-3" />
-                    <span>{language === 'bn' ? 'কালার: ' : 'Color: '}{currentProduct.color}</span>
-                  </div>
-                )}
+                {/* Selectable Color Variant Chips if product has colors */}
+                {(() => {
+                  const pColors =
+                    currentProduct.colors && currentProduct.colors.length > 0
+                      ? currentProduct.colors
+                      : currentProduct.color
+                      ? currentProduct.color.split(',').map((c) => c.trim()).filter(Boolean)
+                      : [];
+                  if (pColors.length === 0) return null;
+                  return (
+                    <div className="w-full pt-1.5 border-t border-blue-200/60 mt-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                          <Palette className="w-3 h-3 text-purple-600" />
+                          <span>{language === 'bn' ? 'বিক্রির কালার বেছে নিন:' : 'Select Sold Color:'}</span>
+                        </span>
+                        {saleColor && (
+                          <span className="text-[10px] text-purple-700 font-semibold bg-purple-100 px-1.5 py-0.2 rounded">
+                            {saleColor}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {pColors.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setSaleColor(c)}
+                            className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition border ${
+                              saleColor === c
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-xs font-bold'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-purple-50'
+                            }`}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {Boolean(currentProduct.packagingPrice && currentProduct.packagingPrice > 0) && (
                   <div className="flex items-center gap-1 text-amber-700 font-medium">
                     <Package className="w-3 h-3" />

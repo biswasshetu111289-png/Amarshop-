@@ -663,6 +663,7 @@ export async function saveProduct(
     packagingPrice: productData.packagingPrice ? Number(productData.packagingPrice) : 0,
     color: productData.color?.trim() || '',
     colors: productData.colors || (productData.color ? [productData.color.trim()] : []),
+    colorVariants: productData.colorVariants || [],
   };
 
   if (productData.id) {
@@ -1373,6 +1374,74 @@ export async function addCapitalPayment(
     paidAmount: newPaidAmount,
     dueAmount: newDueAmount,
     contributions: [...existingContributions, newContribution],
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Edit a capital installment payment for a partner (কিস্তি এডিট)
+ */
+export async function editCapitalPayment(
+  targetId: string,
+  partnerId: string,
+  contributionId: string,
+  data: { amount: number; date?: string; notes?: string }
+): Promise<void> {
+  const colRef = getPartnersCollection(targetId);
+  const docRef = doc(colRef, partnerId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) throw new Error('পার্টনার তথ্য পাওয়া যায়নি');
+
+  const existing = docSnap.data() as PartnerInvestor;
+  const list = existing.contributions || [];
+  const idx = list.findIndex((c) => c.id === contributionId);
+  if (idx === -1) throw new Error('কিস্তির রেকর্ড পাওয়া যায়নি');
+
+  const updatedContributions = [...list];
+  updatedContributions[idx] = {
+    ...updatedContributions[idx],
+    amount: Number(data.amount) || 0,
+    date: data.date || updatedContributions[idx].date,
+    notes: data.notes !== undefined ? data.notes : updatedContributions[idx].notes,
+  };
+
+  const newPaidAmount = updatedContributions.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  const committedAmount = Number(existing.committedAmount) || 0;
+  const newDueAmount = Math.max(0, committedAmount - newPaidAmount);
+
+  await updateDoc(docRef, {
+    paidAmount: newPaidAmount,
+    dueAmount: newDueAmount,
+    contributions: updatedContributions,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Delete a capital installment payment for a partner (কিস্তি মুছে ফেলা)
+ */
+export async function deleteCapitalPayment(
+  targetId: string,
+  partnerId: string,
+  contributionId: string
+): Promise<void> {
+  const colRef = getPartnersCollection(targetId);
+  const docRef = doc(colRef, partnerId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) throw new Error('পার্টনার তথ্য পাওয়া যায়নি');
+
+  const existing = docSnap.data() as PartnerInvestor;
+  const list = existing.contributions || [];
+  const updatedContributions = list.filter((c) => c.id !== contributionId);
+
+  const newPaidAmount = updatedContributions.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  const committedAmount = Number(existing.committedAmount) || 0;
+  const newDueAmount = Math.max(0, committedAmount - newPaidAmount);
+
+  await updateDoc(docRef, {
+    paidAmount: newPaidAmount,
+    dueAmount: newDueAmount,
+    contributions: updatedContributions,
     updatedAt: new Date().toISOString(),
   });
 }

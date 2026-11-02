@@ -20,6 +20,8 @@ import {
   addPartnerInvestor as apiAddPartnerInvestor,
   updatePartnerInvestor as apiUpdatePartnerInvestor,
   addCapitalPayment as apiAddCapitalPayment,
+  editCapitalPayment as apiEditCapitalPayment,
+  deleteCapitalPayment as apiDeleteCapitalPayment,
   deletePartnerInvestor as apiDeletePartnerInvestor,
   addSupplierDue as apiAddSupplierDue,
   updateSupplierDue as apiUpdateSupplierDue,
@@ -102,6 +104,8 @@ export interface StoreContextType {
   addPartnerInvestor: (partner: Omit<PartnerInvestor, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updatePartnerInvestor: (partnerId: string, data: Partial<PartnerInvestor>) => Promise<void>;
   addCapitalPayment: (partnerId: string, amount: number, notes?: string, date?: string) => Promise<void>;
+  editCapitalPayment: (partnerId: string, contributionId: string, data: { amount: number; date?: string; notes?: string }) => Promise<void>;
+  deleteCapitalPayment: (partnerId: string, contributionId: string) => Promise<void>;
   deletePartnerInvestor: (partnerId: string) => Promise<void>;
 
   // Wholesaler / Supplier Dues (Accounts Payable)
@@ -162,6 +166,8 @@ const StoreContext = createContext<StoreContextType>({
   addPartnerInvestor: async () => '',
   updatePartnerInvestor: async () => {},
   addCapitalPayment: async () => {},
+  editCapitalPayment: async () => {},
+  deleteCapitalPayment: async () => {},
   deletePartnerInvestor: async () => {},
 
   supplierDues: [],
@@ -863,6 +869,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [targetStoreId]
   );
 
+  const editCapitalPayment = useCallback(
+    async (partnerId: string, contributionId: string, data: { amount: number; date?: string; notes?: string }) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiEditCapitalPayment(targetStoreId, partnerId, contributionId, data);
+    },
+    [targetStoreId]
+  );
+
+  const deleteCapitalPayment = useCallback(
+    async (partnerId: string, contributionId: string) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiDeleteCapitalPayment(targetStoreId, partnerId, contributionId);
+    },
+    [targetStoreId]
+  );
+
   const deletePartnerInvestor = useCallback(
     async (partnerId: string) => {
       if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
@@ -953,6 +975,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addPartnerInvestor,
     updatePartnerInvestor,
     addCapitalPayment,
+    editCapitalPayment,
+    deleteCapitalPayment,
     deletePartnerInvestor,
 
     // Supplier Dues

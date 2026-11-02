@@ -39,6 +39,8 @@ export const PartnershipTab: React.FC = () => {
     addPartnerInvestor,
     updatePartnerInvestor,
     addCapitalPayment,
+    editCapitalPayment,
+    deleteCapitalPayment,
     deletePartnerInvestor,
   } = useStore();
 
@@ -50,6 +52,16 @@ export const PartnershipTab: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCapitalModal, setShowCapitalModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+
+  // Contribution Edit Modal State
+  const [editingContribution, setEditingContribution] = useState<{
+    partnerId: string;
+    partnerName: string;
+    contribution: CapitalContribution;
+  } | null>(null);
+  const [editContribAmount, setEditContribAmount] = useState('');
+  const [editContribDate, setEditContribDate] = useState('');
+  const [editContribNotes, setEditContribNotes] = useState('');
 
   // Selected partner state
   const [selectedPartner, setSelectedPartner] = useState<PartnerInvestor | null>(null);
@@ -231,6 +243,74 @@ export const PartnershipTab: React.FC = () => {
       setSelectedPartner(null);
     } catch (err: any) {
       showToast(err.message || 'মুছে ফেলতে সমস্যা হয়েছে', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Open Edit Contribution Modal
+  const openEditContributionModal = (partner: PartnerInvestor, contrib: CapitalContribution) => {
+    if (!canManage) {
+      showToast('শুধুমাত্র প্রধান এডমিন বা ম্যানেজার কিস্তি সংশোধন করতে পারেন', 'warning');
+      return;
+    }
+    setEditingContribution({
+      partnerId: partner.id,
+      partnerName: partner.name,
+      contribution: contrib,
+    });
+    setEditContribAmount(String(contrib.amount));
+    setEditContribDate(contrib.date || new Date().toISOString().split('T')[0]);
+    setEditContribNotes(contrib.notes || '');
+  };
+
+  // Handle Save Edit Contribution
+  const handleSaveEditContribution = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingContribution) return;
+    const amt = parseFloat(editContribAmount);
+    if (isNaN(amt) || amt <= 0) {
+      showToast('সঠিক জমার পরিমাণ দিন', 'warning');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await editCapitalPayment(
+        editingContribution.partnerId,
+        editingContribution.contribution.id,
+        {
+          amount: amt,
+          date: editContribDate,
+          notes: editContribNotes.trim(),
+        }
+      );
+      showToast('কিস্তির তথ্য সফলভাবে আপডেট ও ব্যালেন্স সমন্বয় করা হয়েছে', 'success');
+      setEditingContribution(null);
+    } catch (err: any) {
+      showToast(err.message || 'কিস্তি আপডেট করতে সমস্যা হয়েছে', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle Delete Contribution
+  const handleDeleteContribution = async (partner: PartnerInvestor, contrib: CapitalContribution) => {
+    if (!canManage) {
+      showToast('শুধুমাত্র প্রধান এডমিন বা ম্যানেজার কিস্তি মুছতে পারেন', 'warning');
+      return;
+    }
+    const confirmed = window.confirm(
+      `আপনি কি ${partner.name}-এর ${formatBengaliDate(contrib.date, language)}-এর ৳${contrib.amount} কিস্তিটি মুছে ফেলতে চান? জমা মূলধন থেকে এই টাকা সমন্বয় করা হবে।`
+    );
+    if (!confirmed) return;
+
+    try {
+      setSubmitting(true);
+      await deleteCapitalPayment(partner.id, contrib.id);
+      showToast('কিস্তির রেকর্ড মুছে ফেলা হয়েছে ও ব্যালেন্স আপডেট হয়েছে', 'info');
+    } catch (err: any) {
+      showToast(err.message || 'মুছতে সমস্যা হয়েছে', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -722,7 +802,7 @@ export const PartnershipTab: React.FC = () => {
                         {partner.contributions.map((c) => (
                           <div
                             key={c.id}
-                            className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200/70 text-xs"
+                            className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200/70 text-xs hover:border-slate-300 transition"
                           >
                             <div className="flex items-center gap-2">
                               <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -735,9 +815,31 @@ export const PartnershipTab: React.FC = () => {
                                 )}
                               </div>
                             </div>
-                            <span className="font-bold text-emerald-600">
-                              +{formatCurrency(c.amount, language)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-emerald-600">
+                                +{formatCurrency(c.amount, language)}
+                              </span>
+                              {canManage && (
+                                <div className="flex items-center gap-0.5 pl-1.5 border-l border-slate-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditContributionModal(partner, c)}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                    title={language === 'bn' ? 'কিস্তি সংশোধন করুন' : 'Edit contribution'}
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteContribution(partner, c)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                    title={language === 'bn' ? 'কিস্তি মুছে ফেলুন' : 'Delete contribution'}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1241,6 +1343,105 @@ export const PartnershipTab: React.FC = () => {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: EDIT CONTRIBUTION MODAL */}
+      {/* ========================================================================= */}
+      {editingContribution && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <Edit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    {language === 'bn' ? 'কিস্তির রেকর্ড সংশোধন' : 'Edit Contribution'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {editingContribution.partnerName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingContribution(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditContribution} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {language === 'bn' ? 'জমার পরিমাণ (৳)' : 'Amount (৳)'} <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold">৳</span>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    min="1"
+                    value={editContribAmount}
+                    onChange={(e) => setEditContribAmount(e.target.value)}
+                    className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {language === 'bn' ? 'জমার তারিখ' : 'Date'} <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={editContribDate}
+                  onChange={(e) => setEditContribDate(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {language === 'bn' ? 'বিবরণ বা নোট' : 'Notes'}
+                </label>
+                <input
+                  type="text"
+                  value={editContribNotes}
+                  onChange={(e) => setEditContribNotes(e.target.value)}
+                  placeholder="যেমন: ব্যাংক ট্রান্সফার, চেক বা নগদ জমা"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingContribution(null)}
+                  className="w-1/3 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition"
+                >
+                  {language === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-2/3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>{language === 'bn' ? 'আপডেট করুন' : 'Save Changes'}</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

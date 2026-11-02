@@ -33,12 +33,14 @@ import {
   Building2,
   Receipt,
   Users,
+  BarChart3,
 } from 'lucide-react';
 import { SupplierDuesTab } from './accounting/SupplierDuesTab';
 import { ExpensesTab } from './accounting/ExpensesTab';
 import { PartnershipTab } from './accounting/PartnershipTab';
+import { MonthlyReportTab } from './accounting/MonthlyReportTab';
 
-export type DuesSubTab = 'customer' | 'supplier' | 'expenses' | 'partnership';
+export type DuesSubTab = 'customer' | 'supplier' | 'expenses' | 'partnership' | 'monthly_report';
 
 interface CreditDuesViewProps {
   initialSubTab?: DuesSubTab;
@@ -243,6 +245,18 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => setActiveSubTab('monthly_report')}
+            className={`flex-1 min-w-[75px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
+              activeSubTab === 'monthly_report'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
+            <span className="truncate">{language === 'bn' ? 'রিপোর্ট' : 'Report'}</span>
+          </button>
         </div>
       )}
 
@@ -250,6 +264,9 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
       {!isViewer && activeSubTab === 'supplier' && <SupplierDuesTab />}
       {!isViewer && activeSubTab === 'expenses' && <ExpensesTab />}
       {!isViewer && activeSubTab === 'partnership' && <PartnershipTab />}
+      {!isViewer && activeSubTab === 'monthly_report' && (
+        <MonthlyReportTab onNavigateTab={(tab) => setActiveSubTab(tab as DuesSubTab)} />
+      )}
 
       {/* Customer Dues Tab View */}
       {activeSubTab === 'customer' && (
