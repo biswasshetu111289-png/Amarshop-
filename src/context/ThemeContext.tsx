@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Palette, Check, RotateCcw, X, Sparkles } from 'lucide-react';
+import { Palette, Check, RotateCcw, X, Sparkles, Type, ZoomIn } from 'lucide-react';
 import { useToast } from './ToastContext';
 
 export interface AppTheme {
@@ -145,14 +145,81 @@ export const APP_THEMES: AppTheme[] = [
   },
 ];
 
+export interface AppFont {
+  id: string;
+  nameBn: string;
+  nameEn: string;
+  fontFamily: string;
+  description: string;
+  sampleText: string;
+}
+
+export const APP_FONTS: AppFont[] = [
+  {
+    id: 'hind-siliguri',
+    nameBn: 'হিন্দ শিলিগুড়ি (ডিফল্ট)',
+    nameEn: 'Hind Siliguri (Clean & Modern)',
+    fontFamily: "'Hind Siliguri', sans-serif",
+    description: 'সহজপাঠ্য, স্ট্যান্ডার্ড ও আধুনিক বিজনেস ফন্ট',
+    sampleText: 'আমার বিজনেস: ১২৩,৪৫৬ ৳',
+  },
+  {
+    id: 'noto-sans-bengali',
+    nameBn: 'নোটো সান্স বাংলা (গুগল অফিসিয়াল)',
+    nameEn: 'Noto Sans Bengali (High Clarity)',
+    fontFamily: "'Noto Sans Bengali', sans-serif",
+    description: 'খুবই স্পষ্ট ও নিখুঁত সব ডিভাইসে অতি-সহজে পাঠযোগ্য',
+    sampleText: 'আমার বিজনেস: ১২৩,৪৫৬ ৳',
+  },
+  {
+    id: 'anek-bangla',
+    nameBn: 'অনেক বাংলা (বোল্ড ও স্পষ্ট)',
+    nameEn: 'Anek Bangla (Bold & Contemporary)',
+    fontFamily: "'Anek Bangla', sans-serif",
+    description: 'বোল্ড ও অত্যন্ত সুস্পষ্ট সমকালীন বাংলা হরফ',
+    sampleText: 'আমার বিজনেস: ১২৩,৪৫৬ ৳',
+  },
+  {
+    id: 'mina',
+    nameBn: 'মিনা ফন্ট (গোলাকার ও বড় হরফ)',
+    nameEn: 'Mina (Wide & Rounded)',
+    fontFamily: "'Mina', sans-serif",
+    description: 'বৃত্তাকার ও বড় আকারের চোখ জুড়ানো অক্ষর',
+    sampleText: 'আমার বিজনেস: ১২৩,৪৫৬ ৳',
+  },
+  {
+    id: 'tiro-bangla',
+    nameBn: 'তিরো বাংলা (ঐতিহ্যবাহী সেরিপ)',
+    nameEn: 'Tiro Bangla (Formal Serif)',
+    fontFamily: "'Tiro Bangla', serif",
+    description: 'আনুষ্ঠানিক ও ক্লাসিক প্রিন্ট পেপার স্টাইল',
+    sampleText: 'আমার বিজনেস: ১২৩,৪৫৬ ৳',
+  },
+  {
+    id: 'system',
+    nameBn: 'সিস্টেম ফন্ট (মোবাইলের নিজস্ব)',
+    nameEn: 'System Sans',
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    description: 'আপনার ফোনের নিজস্ব সিস্টেম ফন্ট ব্যবহার করবে',
+    sampleText: 'আমার বিজনেস: ১২৩,৪৫৬ ৳',
+  },
+];
+
+export type AppFontSize = 'compact' | 'normal' | 'large';
+
 interface ThemeContextType {
   themeId: string;
   activeTheme: AppTheme;
   customBg: string;
   cardStyle: 'white' | 'glass' | 'dark';
+  fontId: string;
+  activeFont: AppFont;
+  fontSize: AppFontSize;
   setThemeId: (id: string) => void;
   setCustomBg: (hex: string) => void;
   setCardStyle: (style: 'white' | 'glass' | 'dark') => void;
+  setFontId: (id: string) => void;
+  setFontSize: (size: AppFontSize) => void;
   resetTheme: () => void;
   showThemeModal: boolean;
   setShowThemeModal: (show: boolean) => void;
@@ -163,9 +230,14 @@ const ThemeContext = createContext<ThemeContextType>({
   activeTheme: APP_THEMES[0],
   customBg: '#0f172a',
   cardStyle: 'white',
+  fontId: 'hind-siliguri',
+  activeFont: APP_FONTS[0],
+  fontSize: 'normal',
   setThemeId: () => {},
   setCustomBg: () => {},
   setCardStyle: () => {},
+  setFontId: () => {},
+  setFontSize: () => {},
   resetTheme: () => {},
   showThemeModal: false,
   setShowThemeModal: () => {},
@@ -184,9 +256,32 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return (localStorage.getItem('amarshop_app_card_style') as 'white' | 'glass' | 'dark') || 'white';
   });
 
+  const [fontId, setFontIdState] = useState<string>(() => {
+    return localStorage.getItem('amarshop_app_font') || 'hind-siliguri';
+  });
+
+  const [fontSize, setFontSizeState] = useState<AppFontSize>(() => {
+    return (localStorage.getItem('amarshop_app_font_size') as AppFontSize) || 'normal';
+  });
+
   const [showThemeModal, setShowThemeModal] = useState(false);
 
   const activeTheme = APP_THEMES.find((t) => t.id === themeId) || APP_THEMES[0];
+  const activeFont = APP_FONTS.find((f) => f.id === fontId) || APP_FONTS[0];
+
+  // Apply font family and font size globally to root document
+  useEffect(() => {
+    document.documentElement.style.fontFamily = activeFont.fontFamily;
+    document.body.style.fontFamily = activeFont.fontFamily;
+
+    if (fontSize === 'large') {
+      document.documentElement.style.fontSize = '17.5px';
+    } else if (fontSize === 'compact') {
+      document.documentElement.style.fontSize = '14.5px';
+    } else {
+      document.documentElement.style.fontSize = '16px';
+    }
+  }, [activeFont, fontSize]);
 
   const setThemeId = (id: string) => {
     setThemeIdState(id);
@@ -209,16 +304,30 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('amarshop_login_card_style', style);
   };
 
+  const setFontId = (id: string) => {
+    setFontIdState(id);
+    localStorage.setItem('amarshop_app_font', id);
+  };
+
+  const setFontSize = (size: AppFontSize) => {
+    setFontSizeState(size);
+    localStorage.setItem('amarshop_app_font_size', size);
+  };
+
   const resetTheme = () => {
     setThemeIdState('navy-indigo');
     setCustomBgState('#0f172a');
     setCardStyleState('white');
+    setFontIdState('hind-siliguri');
+    setFontSizeState('normal');
     localStorage.removeItem('amarshop_app_theme');
     localStorage.removeItem('amarshop_login_theme');
     localStorage.removeItem('amarshop_app_custom_bg');
     localStorage.removeItem('amarshop_login_custom_bg');
     localStorage.removeItem('amarshop_app_card_style');
     localStorage.removeItem('amarshop_login_card_style');
+    localStorage.removeItem('amarshop_app_font');
+    localStorage.removeItem('amarshop_app_font_size');
   };
 
   return (
@@ -228,9 +337,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         activeTheme,
         customBg,
         cardStyle,
+        fontId,
+        activeFont,
+        fontSize,
         setThemeId,
         setCustomBg,
         setCardStyle,
+        setFontId,
+        setFontSize,
         resetTheme,
         showThemeModal,
         setShowThemeModal,
@@ -248,7 +362,19 @@ export const useTheme = () => useContext(ThemeContext);
  * Universal Global Theme Modal (Works on Login page and everywhere inside the app)
  */
 export const ThemeCustomizerModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { themeId, customBg, cardStyle, setThemeId, setCustomBg, setCardStyle, resetTheme } = useTheme();
+  const {
+    themeId,
+    customBg,
+    cardStyle,
+    fontId,
+    fontSize,
+    setThemeId,
+    setCustomBg,
+    setCardStyle,
+    setFontId,
+    setFontSize,
+    resetTheme,
+  } = useTheme();
   const { showToast } = useToast();
 
   const handleApplyTheme = (id: string) => {
@@ -266,9 +392,19 @@ export const ThemeCustomizerModal: React.FC<{ onClose: () => void }> = ({ onClos
     showToast('কার্ড স্টাইল পরিবর্তন করা হয়েছে!', 'success');
   };
 
+  const handleApplyFont = (fId: string, fontName: string) => {
+    setFontId(fId);
+    showToast(`ফন্ট পরিবর্তন করা হয়েছে: ${fontName}`, 'success');
+  };
+
+  const handleApplyFontSize = (size: AppFontSize) => {
+    setFontSize(size);
+    showToast('লেখার সাইজ সমন্বয় করা হয়েছে', 'info');
+  };
+
   const handleReset = () => {
     resetTheme();
-    showToast('ডিফল্ট থিমে ফিরিয়ে নেওয়া হয়েছে', 'info');
+    showToast('ডিফল্ট থিম ও ফন্টে ফিরিয়ে নেওয়া হয়েছে', 'info');
   };
 
   return (
@@ -280,8 +416,8 @@ export const ThemeCustomizerModal: React.FC<{ onClose: () => void }> = ({ onClos
               <Palette className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-base">অ্যাপ ও লগইন থিম কাস্টমাইজার</h3>
-              <p className="text-[11px] text-slate-500">এখানে পরিবর্তন করলে পুরো অ্যাপের কালার ও স্টাইল পরিবর্তিত হবে</p>
+              <h3 className="font-bold text-slate-800 text-base">অ্যাপ ও থিম কাস্টমাইজার</h3>
+              <p className="text-[11px] text-slate-500">কালার, ফন্ট স্টাইল ও লেখার সাইজ আপনার সুবিধামতো সাজিয়ে নিন</p>
             </div>
           </div>
           <button
@@ -294,6 +430,96 @@ export const ThemeCustomizerModal: React.FC<{ onClose: () => void }> = ({ onClos
         </div>
 
         <div className="mt-4 space-y-5">
+          {/* Font & Readability Section */}
+          <div className="p-3.5 bg-gradient-to-br from-indigo-50/60 to-blue-50/40 rounded-xl border border-indigo-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Type className="w-4 h-4 text-indigo-600" />
+                ফন্ট নির্বাচন ও পাঠযোগ্যতা (Font Style)
+              </label>
+              <span className="text-[10px] text-indigo-700 bg-white px-2 py-0.5 rounded-full font-bold border border-indigo-200 shadow-2xs">
+                বাংলা ফন্ট
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              যদি অ্যাপের লেখা বা সংখ্যা পড়তে অসুবিধা হয়, তবে নিচের পছন্দের স্পষ্ট ফন্টটি বেছে নিন:
+            </p>
+
+            {/* Font Family Options */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {APP_FONTS.map((font) => {
+                const isSelected = fontId === font.id;
+                return (
+                  <button
+                    key={font.id}
+                    type="button"
+                    onClick={() => handleApplyFont(font.id, font.nameBn)}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer relative ${
+                      isSelected
+                        ? 'border-indigo-600 bg-white ring-2 ring-indigo-500/25 shadow-xs'
+                        : 'border-slate-200/80 hover:border-indigo-300 bg-white/90 hover:bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-800" style={{ fontFamily: font.fontFamily }}>
+                        {font.nameBn}
+                      </span>
+                      {isSelected && (
+                        <div className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                          <Check className="w-2.5 h-2.5" />
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      className="text-xs font-bold text-indigo-700 bg-indigo-50/60 px-2 py-1 rounded-md border border-indigo-100/60 my-1 truncate"
+                      style={{ fontFamily: font.fontFamily }}
+                    >
+                      {font.sampleText}
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-tight">{font.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Font Size Adjuster */}
+            <div className="pt-2 border-t border-indigo-100/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <ZoomIn className="w-3.5 h-3.5 text-indigo-600" />
+                  লেখার আকার / ফন্ট সাইজ (Font Size)
+                </span>
+                <span className="text-[10px] text-indigo-600 font-semibold bg-white px-2 py-0.5 rounded-full border border-indigo-100">
+                  {fontSize === 'large' ? 'বড় হরফ (১০৬%)' : fontSize === 'compact' ? 'ছোট (৯৫%)' : 'স্বাভাবিক (১০০%)'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'compact', label: 'ছোট (Compact)', desc: '৯৫% স্কেল' },
+                  { id: 'normal', label: 'স্বাভাবিক (Normal)', desc: '১০০% ডিফল্ট' },
+                  { id: 'large', label: 'বড় ও স্পষ্ট (Large)', desc: '১০৬% বড় হরফ' },
+                ].map((sizeItem) => {
+                  const isSelected = fontSize === sizeItem.id;
+                  return (
+                    <button
+                      key={sizeItem.id}
+                      type="button"
+                      onClick={() => handleApplyFontSize(sizeItem.id as AppFontSize)}
+                      className={`p-2 rounded-xl border text-center transition cursor-pointer ${
+                        isSelected
+                          ? 'border-indigo-600 bg-white ring-2 ring-indigo-500/20 font-bold text-indigo-700 shadow-2xs'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <p className="text-xs">{sizeItem.label}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{sizeItem.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           {/* Preset Themes */}
           <div>
             <div className="flex items-center justify-between mb-2">

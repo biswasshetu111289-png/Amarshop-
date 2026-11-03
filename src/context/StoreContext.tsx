@@ -84,6 +84,8 @@ export interface StoreContextType {
   todaySalesAmount: number;
   totalProfitAmount: number;
   grossProfitAmount: number;
+  totalInventoryBuyValue: number;
+  totalInventorySellValue: number;
   lowStockProducts: Product[];
 
   // Expenses & Actual Net Profit
@@ -148,6 +150,8 @@ const StoreContext = createContext<StoreContextType>({
   todaySalesAmount: 0,
   totalProfitAmount: 0,
   grossProfitAmount: 0,
+  totalInventoryBuyValue: 0,
+  totalInventorySellValue: 0,
   lowStockProducts: [],
 
   expenses: [],
@@ -820,6 +824,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return products.filter((p) => p.qty <= 5);
   }, [products]);
 
+  // Inventory asset valuation (মোট মজুদের ক্রয়মূল্য ও বিক্রয়মূল্য)
+  const totalInventoryBuyValue = useMemo(() => {
+    return products.reduce((acc, p) => acc + (p.qty > 0 ? Number(p.qty) * (Number(p.buyPrice) || 0) : 0), 0);
+  }, [products]);
+
+  const totalInventorySellValue = useMemo(() => {
+    return products.reduce((acc, p) => acc + (p.qty > 0 ? Number(p.qty) * (Number(p.sellPrice) || 0) : 0), 0);
+  }, [products]);
+
   // Accounting Action Callbacks
   const addExpense = useCallback(
     async (expense: Omit<Expense, 'id' | 'createdAt'>) => {
@@ -955,6 +968,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     todaySalesAmount,
     totalProfitAmount,
     grossProfitAmount,
+    totalInventoryBuyValue,
+    totalInventorySellValue,
     lowStockProducts,
 
     // Expenses

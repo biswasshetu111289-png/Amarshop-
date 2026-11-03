@@ -3,7 +3,7 @@ import { useStore } from '../../context/StoreContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useToast } from '../../context/ToastContext';
 import { PartnerInvestor, CapitalContribution } from '../../types';
-import { formatCurrency, formatNumber, formatBengaliDate } from '../../utils/formatters';
+import { formatCurrency, formatNumber, formatBengaliDate, toBengaliNumber } from '../../utils/formatters';
 import {
   Users,
   UserPlus,
@@ -62,6 +62,13 @@ export const PartnershipTab: React.FC = () => {
   const [editContribAmount, setEditContribAmount] = useState('');
   const [editContribDate, setEditContribDate] = useState('');
   const [editContribNotes, setEditContribNotes] = useState('');
+
+  // Contribution Delete Confirm Modal State
+  const [deletingContribution, setDeletingContribution] = useState<{
+    partnerId: string;
+    partnerName: string;
+    contribution: CapitalContribution;
+  } | null>(null);
 
   // Selected partner state
   const [selectedPartner, setSelectedPartner] = useState<PartnerInvestor | null>(null);
@@ -295,20 +302,25 @@ export const PartnershipTab: React.FC = () => {
   };
 
   // Handle Delete Contribution
-  const handleDeleteContribution = async (partner: PartnerInvestor, contrib: CapitalContribution) => {
+  const handleDeleteContribution = (partner: PartnerInvestor, contrib: CapitalContribution) => {
     if (!canManage) {
       showToast('শুধুমাত্র প্রধান এডমিন বা ম্যানেজার কিস্তি মুছতে পারেন', 'warning');
       return;
     }
-    const confirmed = window.confirm(
-      `আপনি কি ${partner.name}-এর ${formatBengaliDate(contrib.date, language)}-এর ৳${contrib.amount} কিস্তিটি মুছে ফেলতে চান? জমা মূলধন থেকে এই টাকা সমন্বয় করা হবে।`
-    );
-    if (!confirmed) return;
+    setDeletingContribution({
+      partnerId: partner.id,
+      partnerName: partner.name,
+      contribution: contrib,
+    });
+  };
 
+  const handleConfirmDeleteContribution = async () => {
+    if (!deletingContribution) return;
     try {
       setSubmitting(true);
-      await deleteCapitalPayment(partner.id, contrib.id);
-      showToast('কিস্তির রেকর্ড মুছে ফেলা হয়েছে ও ব্যালেন্স আপডেট হয়েছে', 'info');
+      await deleteCapitalPayment(deletingContribution.partnerId, deletingContribution.contribution.id);
+      showToast('কিস্তির রেকর্ড সফলভাবে মুছে ফেলা হয়েছে ও ব্যালেন্স সমন্বয় হয়েছে', 'info');
+      setDeletingContribution(null);
     } catch (err: any) {
       showToast(err.message || 'মুছতে সমস্যা হয়েছে', 'error');
     } finally {
@@ -758,97 +770,149 @@ export const PartnershipTab: React.FC = () => {
                       </button>
                     )}
 
-                    <button
-                      onClick={() =>
-                        setExpandedPartnerId(isExpanded ? null : partner.id)
+                    {(() => {
+                      // Get all contributions sorted chronologically by date
+                      let list = partner.contributions ? [...partner.contributions] : [];
+                      if (list.length === 0 && (Number(partner.paidAmount) || 0) > 0) {
+                        list = [
+                          {
+                            id: `initial_${partner.id}`,
+                            date: partner.createdAt ? partner.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+                            amount: Number(partner.paidAmount) || 0,
+                            notes: 'প্রারম্ভিক মূলধন জমা',
+                          },
+                        ];
                       }
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-indigo-50 transition ml-auto"
-                    >
-                      <span>
-                        {language === 'bn'
-                          ? `কিস্তি হিস্ট্রি (${formatNumber(
-                              partner.contributions?.length || 0,
-                              language
-                            )})`
-                          : `Installments (${partner.contributions?.length || 0})`}
-                      </span>
-                      {isExpanded ? (
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                      const sortedContributions = list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+                      const BENGALI_ORDINALS = ['১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম', '১১তম', '১২তম', '১৩তম', '১৪তম', '১৫তম'];
+
+                      return (
+                        <>
+                          <button
+                            onClick={() =>
+                              setExpandedPartnerId(isExpanded ? null : partner.id)
+                            }
+                            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-indigo-50 transition ml-auto"
+                          >
+                            <span>
+                              {language === 'bn'
+                                ? `কিস্তি হিস্ট্রি (${formatNumber(
+                                    sortedContributions.length,
+                                    language
+                                  )})`
+                                : `Installments (${sortedContributions.length})`}
+                            </span>
+                            {isExpanded ? (
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
-                {/* Expanded Capital Contributions / Installment Log */}
-                {isExpanded && (
-                  <div className="bg-slate-50/80 border-t border-slate-100 p-3 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                      <span>{language === 'bn' ? 'মূলধন জমার কিস্তি হিস্ট্রি' : 'Capital Contribution History'}</span>
-                      {partner.notes && (
-                        <span className="text-[11px] text-slate-400 font-normal italic">
-                          নোট: {partner.notes}
+                {/* Expanded Capital Contributions / Chronological Installment Log */}
+                {isExpanded && (() => {
+                  let list = partner.contributions ? [...partner.contributions] : [];
+                  if (list.length === 0 && (Number(partner.paidAmount) || 0) > 0) {
+                    list = [
+                      {
+                        id: `initial_${partner.id}`,
+                        date: partner.createdAt ? partner.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+                        amount: Number(partner.paidAmount) || 0,
+                        notes: 'প্রারম্ভিক মূলধন জমা',
+                      },
+                    ];
+                  }
+                  const sortedContributions = list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+                  const BENGALI_ORDINALS = ['১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম', '১১তম', '১২তম', '১৩তম', '১৪তম', '১৫তম'];
+
+                  return (
+                    <div className="bg-slate-50/90 border-t border-slate-100 p-3 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                        <span className="flex items-center gap-1.5">
+                          <Coins className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>{language === 'bn' ? 'মূলধন জমার কিস্তি হিস্ট্রি (তারিখ ক্রমানুসারে)' : 'Chronological Installments'}</span>
                         </span>
+                        {partner.notes && (
+                          <span className="text-[11px] text-slate-400 font-normal italic truncate max-w-[200px]">
+                            নোট: {partner.notes}
+                          </span>
+                        )}
+                      </div>
+
+                      {sortedContributions.length === 0 ? (
+                        <p className="text-xs text-slate-400 py-2 text-center">
+                          {language === 'bn' ? 'এখনো কোনো কিস্তি রেকর্ড নেই' : 'No contribution entries'}
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                          {sortedContributions.map((c, idx) => {
+                            const ordinalLabel =
+                              idx < BENGALI_ORDINALS.length
+                                ? `${BENGALI_ORDINALS[idx]} কিস্তি`
+                                : `#${toBengaliNumber(idx + 1)} কিস্তি`;
+
+                            return (
+                              <div
+                                key={c.id || idx}
+                                className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200/80 text-xs hover:border-indigo-300 hover:shadow-xs transition"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[10px] border border-indigo-100 shrink-0">
+                                    {ordinalLabel}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span className="font-semibold text-slate-800">
+                                        {formatBengaliDate(c.date, language)}
+                                      </span>
+                                    </div>
+                                    {c.notes && (
+                                      <p className="text-[10px] text-slate-500 mt-0.5 truncate">{c.notes}</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
+                                    +{formatCurrency(c.amount, language)}
+                                  </span>
+                                  {canManage && (
+                                    <div className="flex items-center gap-0.5 pl-1.5 border-l border-slate-200">
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditContributionModal(partner, c)}
+                                        className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                                        title={language === 'bn' ? 'কিস্তি সংশোধন করুন' : 'Edit contribution'}
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteContribution(partner, c)}
+                                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                        title={language === 'bn' ? 'কিস্তি মুছে ফেলুন' : 'Delete contribution'}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-
-                    {!partner.contributions || partner.contributions.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-1 text-center">
-                        {language === 'bn' ? 'এখনো কোনো কিস্তি রেকর্ড নেই' : 'No contribution entries'}
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {partner.contributions.map((c) => (
-                          <div
-                            key={c.id}
-                            className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200/70 text-xs hover:border-slate-300 transition"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              <div>
-                                <span className="font-medium text-slate-700">
-                                  {formatBengaliDate(c.date, language)}
-                                </span>
-                                {c.notes && (
-                                  <p className="text-[10px] text-slate-400">{c.notes}</p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-emerald-600">
-                                +{formatCurrency(c.amount, language)}
-                              </span>
-                              {canManage && (
-                                <div className="flex items-center gap-0.5 pl-1.5 border-l border-slate-100">
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditContributionModal(partner, c)}
-                                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                                    title={language === 'bn' ? 'কিস্তি সংশোধন করুন' : 'Edit contribution'}
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteContribution(partner, c)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                                    title={language === 'bn' ? 'কিস্তি মুছে ফেলুন' : 'Delete contribution'}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
               </div>
-            );
-          })}
+            );          })}
         </div>
       )}
 
@@ -1445,6 +1509,59 @@ export const PartnershipTab: React.FC = () => {
           </div>
         </div>
       )}
+      {/* ========================================================================= */}
+      {/* MODAL 6: DELETE CONTRIBUTION CONFIRM MODAL */}
+      {/* ========================================================================= */}
+      {deletingContribution && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                {language === 'bn' ? 'কিস্তির রেকর্ড মুছে ফেলবেন?' : 'Delete Installment Record?'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                {language === 'bn' ? (
+                  <>
+                    <strong className="text-slate-800 font-bold">{deletingContribution.partnerName}</strong>-এর{' '}
+                    <strong className="text-rose-600 font-bold">
+                      {formatCurrency(deletingContribution.contribution.amount, language)}
+                    </strong>{' '}
+                    টাকার কিস্তিটি মুছে ফেললে তা মোট জমা মূলধন থেকে স্বয়ংক্রিয়ভাবে বাদ দেওয়া হবে।
+                  </>
+                ) : (
+                  `Delete ${formatCurrency(deletingContribution.contribution.amount, 'en')} contribution for ${deletingContribution.partnerName}?`
+                )}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeletingContribution(null)}
+                className="w-1/2 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition"
+              >
+                {language === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteContribution}
+                disabled={submitting}
+                className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-500/20 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {submitting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>{language === 'bn' ? 'হ্যাঁ, মুছুন' : 'Delete'}</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

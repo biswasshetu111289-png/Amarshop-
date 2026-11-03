@@ -22,10 +22,18 @@ export default function App() {
   const { themeId, activeTheme, customBg } = useTheme();
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [duesSubTab, setDuesSubTab] = useState<DuesSubTab>('customer');
+  const [stockInitialFilter, setStockInitialFilter] = useState<'available' | 'all' | 'zero'>('available');
 
-  const handleNavigate = (tab: NavTab, subTab?: DuesSubTab) => {
+  const handleNavigate = (
+    tab: NavTab,
+    subTab?: DuesSubTab,
+    stockFilter?: 'available' | 'all' | 'zero'
+  ) => {
     if (tab === 'dues' && subTab) {
       setDuesSubTab(subTab);
+    }
+    if (tab === 'stock' && stockFilter) {
+      setStockInitialFilter(stockFilter);
     }
     setCurrentTab(tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -74,7 +82,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-[600px] mx-auto px-3.5 pt-4 pb-24">
         <PWAInstallBanner variant="banner" />
         {currentTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
-        {currentTab === 'stock' && <StockView />}
+        {currentTab === 'stock' && <StockView initialFilter={stockInitialFilter} />}
         {currentTab === 'sale' && (
           <SaleEntryView onSuccessNavigate={() => setCurrentTab('history')} />
         )}

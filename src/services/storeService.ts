@@ -1393,9 +1393,26 @@ export async function editCapitalPayment(
   if (!docSnap.exists()) throw new Error('পার্টনার তথ্য পাওয়া যায়নি');
 
   const existing = docSnap.data() as PartnerInvestor;
-  const list = existing.contributions || [];
-  const idx = list.findIndex((c) => c.id === contributionId);
-  if (idx === -1) throw new Error('কিস্তির রেকর্ড পাওয়া যায়নি');
+  let list = existing.contributions ? [...existing.contributions] : [];
+  if (list.length === 0 && (Number(existing.paidAmount) || 0) > 0) {
+    list = [
+      {
+        id: `initial_${partnerId}`,
+        date: existing.createdAt ? existing.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+        amount: Number(existing.paidAmount) || 0,
+        notes: 'প্রারম্ভিক মূলধন জমা',
+      },
+    ];
+  }
+
+  let idx = list.findIndex((c) => c.id === contributionId);
+  if (idx === -1) {
+    if (contributionId.startsWith('initial_') || list.length === 1) {
+      idx = 0;
+    } else {
+      throw new Error('কিস্তির রেকর্ড পাওয়া যায়নি');
+    }
+  }
 
   const updatedContributions = [...list];
   updatedContributions[idx] = {
@@ -1431,8 +1448,21 @@ export async function deleteCapitalPayment(
   if (!docSnap.exists()) throw new Error('পার্টনার তথ্য পাওয়া যায়নি');
 
   const existing = docSnap.data() as PartnerInvestor;
-  const list = existing.contributions || [];
-  const updatedContributions = list.filter((c) => c.id !== contributionId);
+  let list = existing.contributions ? [...existing.contributions] : [];
+  if (list.length === 0 && (Number(existing.paidAmount) || 0) > 0) {
+    list = [
+      {
+        id: `initial_${partnerId}`,
+        date: existing.createdAt ? existing.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+        amount: Number(existing.paidAmount) || 0,
+        notes: 'প্রারম্ভিক মূলধন জমা',
+      },
+    ];
+  }
+
+  const updatedContributions = list.filter(
+    (c) => c.id !== contributionId && !(contributionId.startsWith('initial_') && c.id.startsWith('initial_'))
+  );
 
   const newPaidAmount = updatedContributions.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
   const committedAmount = Number(existing.committedAmount) || 0;

@@ -39,6 +39,7 @@ import {
   Layers,
   ShieldAlert,
   Info,
+  RotateCcw,
 } from 'lucide-react';
 
 const COMMON_COLORS = [
@@ -55,24 +56,44 @@ const COMMON_COLORS = [
   { name: 'মাল্টিকালার', bg: 'bg-gradient-to-r from-red-400 via-green-400 to-blue-500', text: 'text-white' },
 ];
 
-export const StockView: React.FC = () => {
+interface StockViewProps {
+  initialFilter?: 'available' | 'all' | 'zero';
+}
+
+export const StockView: React.FC<StockViewProps> = ({ initialFilter = 'available' }) => {
   const { user } = useAuth();
   const {
     products,
     currentShop,
     canManage,
     isViewer,
+    totalInventoryBuyValue,
+    totalInventorySellValue,
   } = useStore();
   const { showToast } = useToast();
   const { language, t } = useLanguage();
 
-  const [stockFilter, setStockFilter] = useState<'available' | 'all' | 'zero'>('available');
+  const [stockFilter, setStockFilter] = useState<'available' | 'all' | 'zero'>(initialFilter);
+
+  useEffect(() => {
+    if (initialFilter) {
+      setStockFilter(initialFilter);
+    }
+  }, [initialFilter]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCSVModal, setShowCSVModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [purgingDemo, setPurgingDemo] = useState(false);
+
+  // Quick Restock State (শূন্য স্টক রিস্টক)
+  const [restockingProduct, setRestockingProduct] = useState<Product | null>(null);
+  const [restockQty, setRestockQty] = useState('');
+  const [restockBuyPrice, setRestockBuyPrice] = useState('');
+  const [restockSellPrice, setRestockSellPrice] = useState('');
+  const [submittingRestock, setSubmittingRestock] = useState(false);
 
   // Form State
   const [activeTab, setActiveTab] = useState<'basic' | 'packaging_color'>('basic');
@@ -427,6 +448,55 @@ export const StockView: React.FC = () => {
     }
   };
 
+  // Quick Restock Handlers
+  const openRestockModal = (p: Product) => {
+    if (!canManage) {
+      showToast('শুধুমাত্র এডমিন বা ম্যানেজার পণ্য রিস্টক করতে পারেন', 'warning');
+      return;
+    }
+    setRestockingProduct(p);
+    setRestockQty('');
+    setRestockBuyPrice(p.buyPrice !== undefined ? String(p.buyPrice) : '');
+    setRestockSellPrice(p.sellPrice !== undefined ? String(p.sellPrice) : '');
+  };
+
+  const handleConfirmRestock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restockingProduct || !targetId) return;
+
+    const added = parseFloat(restockQty);
+    if (isNaN(added) || added <= 0) {
+      showToast('সঠিক রিস্টক সংখ্যা দিন (কমপক্ষে ১)', 'warning');
+      return;
+    }
+
+    const buy = parseFloat(restockBuyPrice);
+    const sell = parseFloat(restockSellPrice);
+
+    try {
+      setSubmittingRestock(true);
+      const newQty = (Number(restockingProduct.qty) || 0) + added;
+      const updatedProduct: Product = {
+        ...restockingProduct,
+        qty: newQty,
+        buyPrice: !isNaN(buy) && buy >= 0 ? buy : restockingProduct.buyPrice,
+        sellPrice: !isNaN(sell) && sell >= 0 ? sell : restockingProduct.sellPrice,
+      };
+
+      await saveProduct(targetId, updatedProduct);
+      showToast(
+        `"${restockingProduct.name}" সফলভাবে রিস্টক হয়েছে (+${toBengaliNumber(added)} ${restockingProduct.unit})! এখন এভেইলেবল স্টকে যুক্ত হয়েছে।`,
+        'success'
+      );
+      setRestockingProduct(null);
+    } catch (err: any) {
+      console.error('Restock error:', err);
+      showToast(err.message || 'রিস্টক করতে সমস্যা হয়েছে', 'error');
+    } finally {
+      setSubmittingRestock(false);
+    }
+  };
+
   return (
     <div className="space-y-4 pb-4">
       {/* Viewer Notice Banner */}
@@ -515,6 +585,73 @@ export const StockView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Inventory Valuation & Total Purchase Cost Card (মজুদ পণ্যের মোট ক্রয়ের মূল্য ও সম্পদ মূল্যায়ন) */}
+      {!isViewer && (
+        <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 text-white rounded-2xl p-4 shadow-md border border-indigo-800/40 animate-in fade-in">
+          <div className="flex items-center justify-between pb-3 border-b border-indigo-700/40">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-400/20">
+                <Package className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <span>{language === 'bn' ? 'মজুদ পণ্যের মোট ক্রয়মূল্য ও সম্পদ' : 'Inventory Asset Valuation'}</span>
+                </h3>
+                <p className="text-[11px] text-indigo-200/80">
+                  {language === 'bn'
+                    ? 'দোকানের বর্তমান মোট মজুদ পণ্যের ক্রয় ও বিক্রয় হিসাব'
+                    : 'Current inventory cost value, retail value & profit'}
+                </p>
+              </div>
+            </div>
+            <span className="text-[11px] px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold rounded-full">
+              {formatNumber(products.length, language)} {language === 'bn' ? 'আইটেম স্টক' : 'Items'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-3">
+            {/* 1. মোট ক্রয়ের মূল্য */}
+            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-2.5 border border-white/10">
+              <div className="text-[11px] text-indigo-200 font-medium">
+                {language === 'bn' ? 'মোট ক্রয়ের মূল্য (Total Cost)' : 'Total Cost Value'}
+              </div>
+              <div className="text-base sm:text-lg font-bold text-amber-300 mt-0.5">
+                {formatCurrency(totalInventoryBuyValue, language)}
+              </div>
+              <div className="text-[10px] text-indigo-200/70 mt-0.5">
+                {language === 'bn' ? 'বর্তমান স্টকে থাকা পণ্যের ক্রয়মূল্য' : 'Current stock buy value'}
+              </div>
+            </div>
+
+            {/* 2. মোট সম্ভাব্য বিক্রয়মূল্য */}
+            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-2.5 border border-white/10">
+              <div className="text-[11px] text-indigo-200 font-medium">
+                {language === 'bn' ? 'সম্ভাব্য বিক্রয়মূল্য (Retail Value)' : 'Total Retail Value'}
+              </div>
+              <div className="text-base sm:text-lg font-bold text-emerald-300 mt-0.5">
+                {formatCurrency(totalInventorySellValue, language)}
+              </div>
+              <div className="text-[10px] text-indigo-200/70 mt-0.5">
+                {language === 'bn' ? 'সব পণ্য বিক্রির আনুমানিক মান' : 'Expected total sales'}
+              </div>
+            </div>
+
+            {/* 3. সম্ভাব্য গ্রস লাভ */}
+            <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-xs rounded-xl p-2.5 border border-white/10">
+              <div className="text-[11px] text-indigo-200 font-medium">
+                {language === 'bn' ? 'সম্ভাব্য লাভ (Potential Profit)' : 'Potential Profit'}
+              </div>
+              <div className="text-base sm:text-lg font-bold text-cyan-300 mt-0.5">
+                {formatCurrency(Math.max(0, totalInventorySellValue - totalInventoryBuyValue), language)}
+              </div>
+              <div className="text-[10px] text-indigo-200/70 mt-0.5">
+                {language === 'bn' ? 'বিক্রয়মূল্য ও ক্রয়মূল্যের পার্থক্য' : 'Expected stock margin'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search and Category Filter Card */}
       <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm space-y-2.5">
@@ -629,28 +766,73 @@ export const StockView: React.FC = () => {
         </div>
       </div>
 
+      {/* Zero Stock / Stock Out Notice Banner */}
+      {stockFilter === 'zero' && (
+        <div className="p-3 bg-gradient-to-r from-rose-50 via-amber-50 to-orange-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-2xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+              <RotateCcw className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="font-bold text-rose-950">
+                {language === 'bn' ? 'স্টক আউট / শূন্য স্টক পণ্য তালিকা' : 'Out of Stock Products'}
+              </h4>
+              <p className="text-[11px] text-rose-700 mt-0.5">
+                {language === 'bn'
+                  ? 'এই পণ্যগুলোর মজুদ শেষ হয়ে গেছে। নতুন মাল কেনা হলে ডানের "রিস্টক" বাটনে ক্লিক করে সহজে আবার স্টকে ফেরত আনুন।'
+                  : 'These products have zero quantity. Click "Restock" to add fresh inventory.'}
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-rose-600 text-white rounded-full font-bold text-[10px] shrink-0">
+            {formatNumber(zeroCount, language)} {language === 'bn' ? 'টি শেষ' : 'items'}
+          </span>
+        </div>
+      )}
+
       {/* Product List Table / Cards */}
       {filteredProducts.length === 0 ? (
-        <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center">
-          <div className="text-3xl mb-2">📦</div>
-          <p className="font-semibold text-slate-700 text-sm">
-            {language === 'bn' ? 'কোনো প্রোডাক্ট পাওয়া যায়নি' : 'No products found'}
-          </p>
-          <p className="text-xs text-slate-400 mt-1">
-            {searchTerm
-              ? (language === 'bn' ? 'অন্য নাম দিয়ে সার্চ করুন' : 'Try searching with another keyword')
-              : (language === 'bn' ? 'নতুন প্রোডাক্ট যুক্ত করুন' : 'Add your first product to get started')}
-          </p>
-          {canManage && !searchTerm && (
+        stockFilter === 'zero' ? (
+          <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center">
+            <div className="text-4xl mb-2">🎉</div>
+            <p className="font-bold text-emerald-700 text-base">
+              {language === 'bn' ? 'চমৎকার! কোনো পণ্যই স্টক আউট নেই' : 'All products in stock!'}
+            </p>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+              {language === 'bn'
+                ? 'বর্তমানে আপনার দোকানে কোনো পণ্যের স্টক শূন্য নেই। সব পণ্যই সক্রিয় বিক্রির জন্য প্রস্তুত।'
+                : 'There are currently no out-of-stock products.'}
+            </p>
             <button
-              onClick={openAddModal}
-              className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline"
+              type="button"
+              onClick={() => setStockFilter('available')}
+              className="mt-3.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />{' '}
-              {language === 'bn' ? 'প্রথম প্রোডাক্ট যোগ করুন' : 'Add First Product'}
+              {language === 'bn' ? 'এভেইলেবল স্টক দেখুন' : 'View Available Stock'}
             </button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center">
+            <div className="text-3xl mb-2">📦</div>
+            <p className="font-semibold text-slate-700 text-sm">
+              {language === 'bn' ? 'কোনো প্রোডাক্ট পাওয়া যায়নি' : 'No products found'}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              {searchTerm
+                ? (language === 'bn' ? 'অন্য নাম দিয়ে সার্চ করুন' : 'Try searching with another keyword')
+                : (language === 'bn' ? 'নতুন প্রোডাক্ট যুক্ত করুন' : 'Add your first product to get started')}
+            </p>
+            {canManage && !searchTerm && (
+              <button
+                onClick={openAddModal}
+                className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />{' '}
+                {language === 'bn' ? 'প্রথম প্রোডাক্ট যোগ করুন' : 'Add First Product'}
+              </button>
+            )}
+          </div>
+        )
       ) : (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -662,7 +844,7 @@ export const StockView: React.FC = () => {
                   {!isViewer && <th className="py-3 px-2 text-right">{language === 'bn' ? 'ক্রয় মূল্য' : 'Buy Price'}</th>}
                   <th className="py-3 px-2 text-right">{language === 'bn' ? 'বিক্রয় মূল্য' : 'Sell Price'}</th>
                   {!isViewer && <th className="py-3 px-2 text-right">{language === 'bn' ? 'নিট লাভ' : 'Net Profit'}</th>}
-                  {canManage && <th className="py-3 px-2.5 text-center">{language === 'bn' ? 'অ্যাকশন' : 'Action'}</th>}
+                  {canManage && <th className="py-3 px-2.5 text-center">{language === 'bn' ? 'অ্যাকশন / রিস্টক' : 'Action'}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -748,17 +930,39 @@ export const StockView: React.FC = () => {
                       {canManage && (
                         <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1">
+                            {p.qty <= 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => openRestockModal(p)}
+                                title={language === 'bn' ? 'পণ্যটি পুনরায় রিস্টক করুন' : 'Restock product'}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs transition cursor-pointer"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>{language === 'bn' ? 'রিস্টক' : 'Restock'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openRestockModal(p)}
+                                title={language === 'bn' ? 'স্টক যোগ করুন (রিস্টক)' : 'Add stock (Restock)'}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
+                              type="button"
                               onClick={() => openEditModal(p)}
                               title={language === 'bn' ? 'এডিট করুন' : 'Edit'}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleDeleteProduct(p)}
                               title={language === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
-                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1467,6 +1671,138 @@ export const StockView: React.FC = () => {
                   : (language === 'bn' ? 'সব পণ্য ইমপোর্ট করুন' : 'Import All Products')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Restock Modal (পণ্য রিস্টক করুন) */}
+      {restockingProduct && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {language === 'bn' ? 'পণ্য রিস্টক করুন' : 'Restock Product'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {restockingProduct.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRestockingProduct(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 text-xs flex items-center justify-between">
+              <div>
+                <span className="text-slate-400 block text-[10px]">{language === 'bn' ? 'বর্তমান মজুদ' : 'Current Stock'}</span>
+                <span className="font-bold text-rose-600">
+                  {formatQty(restockingProduct.qty, restockingProduct.unit, language)}
+                </span>
+              </div>
+              {restockingProduct.category && (
+                <div className="text-right">
+                  <span className="text-slate-400 block text-[10px]">{language === 'bn' ? 'ক্যাটাগরি' : 'Category'}</span>
+                  <span className="font-semibold text-slate-700">{restockingProduct.category}</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleConfirmRestock} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {language === 'bn' ? 'নতুন যোগ করা পরিমাণ' : 'Added Quantity'} ({restockingProduct.unit}) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.01"
+                    required
+                    autoFocus
+                    value={restockQty}
+                    onChange={(e) => setRestockQty(e.target.value)}
+                    placeholder={`যেমন: ১০ ${restockingProduct.unit}`}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-slate-400">
+                    {restockingProduct.unit}
+                  </span>
+                </div>
+                {restockQty && !isNaN(parseFloat(restockQty)) && (
+                  <p className="text-[11px] text-emerald-600 font-semibold mt-1">
+                    {language === 'bn'
+                      ? `নতুন মোট মজুদ হবে: ${toBengaliNumber((Number(restockingProduct.qty) || 0) + parseFloat(restockQty))} ${restockingProduct.unit}`
+                      : `New total will be: ${(Number(restockingProduct.qty) || 0) + parseFloat(restockQty)} ${restockingProduct.unit}`}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                {!isViewer && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      {language === 'bn' ? 'ক্রয় মূল্য (৳)' : 'Buy Price (৳)'}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={restockBuyPrice}
+                      onChange={(e) => setRestockBuyPrice(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                )}
+
+                <div className={isViewer ? 'col-span-2' : ''}>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'বিক্রয় মূল্য (৳)' : 'Sell Price (৳)'}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={restockSellPrice}
+                    onChange={(e) => setRestockSellPrice(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRestockingProduct(null)}
+                  className="w-1/3 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                >
+                  {language === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingRestock}
+                  className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-500/20 transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {submittingRestock ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>{language === 'bn' ? 'স্টক যুক্ত করুন' : 'Confirm Restock'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

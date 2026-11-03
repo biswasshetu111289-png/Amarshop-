@@ -42,7 +42,11 @@ import { NavTab } from './BottomNav';
 import { DuesSubTab } from './CreditDuesView';
 
 interface DashboardViewProps {
-  onNavigate: (tab: NavTab, subTab?: DuesSubTab) => void;
+  onNavigate: (
+    tab: NavTab,
+    subTab?: DuesSubTab,
+    stockFilter?: 'available' | 'all' | 'zero'
+  ) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
@@ -60,6 +64,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     totalProfitAmount,
     grossProfitAmount,
     netProfitAmount,
+    totalInventoryBuyValue,
     totalExpensesAmount,
     totalSupplierDuesAmount,
     totalCommittedCapital,
@@ -100,6 +105,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   const inStockProductsCount = useMemo(() => {
     return products.filter((p) => p.qty > 0).length;
+  }, [products]);
+
+  const zeroStockProductsCount = useMemo(() => {
+    return products.filter((p) => p.qty <= 0).length;
   }, [products]);
 
   const todayStr = useMemo(() => {
@@ -311,34 +320,78 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* 4 Stat Cards in 2x2 Grid */}
       <div className="grid grid-cols-2 gap-3">
         {/* Card 1: Total Products */}
+        {/* Card 1: Available Product Stock (বর্তমান এভেইলেবল স্টক) */}
         <div
-          onClick={() => onNavigate('stock')}
+          onClick={() => onNavigate('stock', undefined, 'available')}
           className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition cursor-pointer group flex flex-col justify-between"
         >
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500">
-                {language === 'bn' ? 'মোট স্টক' : 'Total Stock'}
+              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{language === 'bn' ? 'এভেইলেবল স্টক' : 'Active Stock'}</span>
               </span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition">
                 <Package className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-xl font-bold text-slate-800">
-                {formatNumber(totalProductsCount, language)} {language === 'bn' ? 'টি পণ্য' : 'items'}
-              </div>
-              <div className="mt-1 flex items-center gap-1">
-                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">
-                  <span>{language === 'bn' ? 'এভেইলেবল স্টক:' : 'Available:'}</span>
-                  <span className="font-bold">{formatNumber(availableStockQty, language)} {language === 'bn' ? 'পিস' : 'pcs'}</span>
+              <div className="text-xl font-bold text-slate-900 flex items-baseline gap-1.5">
+                <span>{formatNumber(inStockProductsCount, language)}</span>
+                <span className="text-xs font-medium text-slate-500">
+                  {language === 'bn' ? 'ধরনের পণ্য হাতে আছে' : 'products available'}
                 </span>
+              </div>
+
+              <div className="mt-1.5 flex flex-col gap-1">
+                {/* Total available units */}
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center justify-between">
+                  <span>{language === 'bn' ? 'মোট মজুদ পরিমাণ:' : 'Total Units:'}</span>
+                  <span className="font-bold">
+                    {formatNumber(availableStockQty, language)} {language === 'bn' ? 'পিস/একক' : 'units'}
+                  </span>
+                </span>
+
+                {/* Total Buy Value for Admin/Manager */}
+                {!isViewer && (
+                  <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 flex items-center justify-between">
+                    <span>{language === 'bn' ? 'মজুদ ক্রয়মূল্য:' : 'Buy Value:'}</span>
+                    <span className="font-bold">{formatCurrency(totalInventoryBuyValue, language)}</span>
+                  </span>
+                )}
+
+                {/* Out of stock alert badge if zeroStockProductsCount > 0 */}
+                {zeroStockProductsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate('stock', undefined, 'zero');
+                    }}
+                    className="mt-0.5 flex items-center justify-between bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 px-2 py-1 rounded-md text-[10px] font-bold transition text-left cursor-pointer"
+                    title={language === 'bn' ? 'শূন্য স্টক পণ্যসমূহ দেখুন ও রিস্টক করুন' : 'View out-of-stock products & restock'}
+                  >
+                    <span className="flex items-center gap-1 truncate">
+                      <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                      <span>{formatNumber(zeroStockProductsCount, language)}টি পণ্য স্টক আউট</span>
+                    </span>
+                    <span className="text-rose-800 underline font-semibold flex items-center gap-0.5 shrink-0 ml-1">
+                      <span>{language === 'bn' ? 'রিস্টক করুন' : 'Restock'}</span>
+                      <ArrowUpRight className="w-2.5 h-2.5" />
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
-          <div className="text-[11px] text-blue-600 flex items-center gap-0.5 mt-2 pt-1 border-t border-slate-100/60">
-            <span>{language === 'bn' ? 'স্টক তালিকা দেখুন' : 'View Stock'}</span>
-            <ArrowUpRight className="w-3 h-3" />
+          <div className="text-[11px] text-blue-600 flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100/60">
+            <span className="font-medium">{language === 'bn' ? 'স্টক খাতা ও রিস্টক' : 'Manage Stock'}</span>
+            <div className="flex items-center gap-0.5">
+              <span className="text-[10px] text-slate-400 font-normal">
+                {language === 'bn' ? `মোট ${formatNumber(totalProductsCount, language)}টি আইটেম` : `Total ${totalProductsCount}`}
+              </span>
+              <ArrowUpRight className="w-3 h-3 text-blue-600 ml-1" />
+            </div>
           </div>
         </div>
 
