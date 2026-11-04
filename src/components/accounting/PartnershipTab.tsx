@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useToast } from '../../context/ToastContext';
@@ -24,6 +24,12 @@ import {
   DollarSign,
   Info,
   Calendar,
+  Armchair,
+  Calculator,
+  Percent,
+  ArrowRightLeft,
+  Scale,
+  Sparkles,
 } from 'lucide-react';
 
 export const PartnershipTab: React.FC = () => {
@@ -34,6 +40,7 @@ export const PartnershipTab: React.FC = () => {
     totalPaidCapital,
     totalCapitalDue,
     netProfitAmount,
+    totalFixedAssetsAmount,
     isAdmin,
     canManage,
     addPartnerInvestor,
@@ -341,9 +348,94 @@ export const PartnershipTab: React.FC = () => {
     }
   };
 
+  // Apply quick share preset for 2, 3, or 4 partners
+  const applySharePreset = async (type: 'equal' | '40_30_30') => {
+    if (!canManage || partners.length === 0) return;
+    try {
+      setSubmitting(true);
+      const count = partners.length;
+      if (type === 'equal') {
+        const baseShare = Math.floor((100 / count) * 100) / 100;
+        for (let i = 0; i < count; i++) {
+          const p = partners[i];
+          const share = i === count - 1 ? Number((100 - baseShare * (count - 1)).toFixed(2)) : baseShare;
+          const targetComm = totalCommittedCapital > 0 ? Math.round((totalCommittedCapital * share) / 100) : p.committedAmount;
+          await updatePartnerInvestor(p.id, {
+            profitShareRatio: share,
+            committedAmount: targetComm,
+            dueAmount: Math.max(0, targetComm - (Number(p.paidAmount) || 0)),
+          });
+        }
+        showToast(`${count} জন অংশীদারের সমান শেয়ার (${baseShare}%) ও মূলধন সমীকরণ সফলভাবে নির্ধারণ করা হয়েছে`, 'success');
+      } else if (type === '40_30_30' && count >= 3) {
+        const ratios = [40, 30, 30];
+        for (let i = 0; i < 3; i++) {
+          const p = partners[i];
+          const share = ratios[i];
+          const targetComm = totalCommittedCapital > 0 ? Math.round((totalCommittedCapital * share) / 100) : p.committedAmount;
+          await updatePartnerInvestor(p.id, {
+            profitShareRatio: share,
+            committedAmount: targetComm,
+            dueAmount: Math.max(0, targetComm - (Number(p.paidAmount) || 0)),
+          });
+        }
+        showToast('৪০% - ৩০% - ৩০% শেয়ার অনুপাত সফলভাবে প্রয়োগ করা হয়েছে', 'success');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'শেয়ার আপডেট করতে সমস্যা হয়েছে', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Find partners with dues to calculate Inter-Partner Due balance
   const partnersWithDues = partners.filter((p) => p.dueAmount > 0);
   const fullyPaidPartners = partners.filter((p) => p.dueAmount <= 0 && p.committedAmount > 0);
+
+  // Partnership Equity & Share Analysis (২, ৩ বা ৪ পার্টনারের শেয়ার ও ইনভেস্টমেন্ট হিসাব)
+  const equityAnalysis = useMemo(() => {
+    return partners.map((p: PartnerInvestor) => {
+      const share = p.profitShareRatio || (partners.length > 0 ? Number((100 / partners.length).toFixed(1)) : 0);
+      const targetByShare = totalCommittedCapital > 0 ? Math.round((totalCommittedCapital * share) / 100) : p.committedAmount;
+      const actualPaid = Number(p.paidAmount) || 0;
+      const due = p.dueAmount;
+      const diffVsShare = actualPaid - targetByShare;
+      return {
+        partner: p,
+        share,
+        targetByShare,
+        actualPaid,
+        due,
+        diffVsShare,
+        isUnderfunded: diffVsShare < -5,
+        isOverfunded: diffVsShare > 5,
+        isBalanced: Math.abs(diffVsShare) <= 5,
+      };
+    });
+  }, [partners, totalCommittedCapital]);
+
+  // Inter-partner dues pairs (কার কাছে কে কত পাবে/দিবে)
+  const settlementSuggestions = useMemo(() => {
+    type EquityItem = (typeof equityAnalysis)[number];
+    const overfunded = equityAnalysis.filter((e: EquityItem) => e.diffVsShare > 10);
+    const underfunded = equityAnalysis.filter((e: EquityItem) => e.diffVsShare < -10);
+
+    const suggestions: string[] = [];
+    if (overfunded.length > 0 && underfunded.length > 0) {
+      for (const under of underfunded) {
+        for (const over of overfunded) {
+          const settlementAmt = Math.min(Math.abs(under.diffVsShare), over.diffVsShare);
+          if (settlementAmt > 10) {
+            suggestions.push(
+              `ইনভেস্টমেন্ট সমতার জন্য ${under.partner.name} থেকে ${over.partner.name} ৳${formatNumber(settlementAmt, language)} প্রাপ্য।`
+            );
+          }
+        }
+      }
+    }
+    return suggestions;
+  }, [equityAnalysis, language]);
+
 
   return (
     <div className="space-y-4">
@@ -454,6 +546,207 @@ export const PartnershipTab: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Fixed Assets Capital Investment Card */}
+      {totalFixedAssetsAmount > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Armchair className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs text-amber-900 font-bold flex items-center gap-1.5">
+                <span>দোকানের স্থায়ী সম্পদে বিনিয়োগকৃত মূলধন</span>
+                <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.2 rounded-full font-bold">
+                  ক্যাপিটাল অ্যাসেট
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-800/80 mt-0.5">
+                ফার্নিচার, ডিসপ্লে বক্স, শোকেস ও ডেকোরেশন বাবদ অংশীদারদের মূলধন সংরক্ষিত আছে
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-base font-black text-amber-800">
+              {formatCurrency(totalFixedAssetsAmount, language)}
+            </div>
+            <span className="text-[10px] text-slate-500">চলতি খরচের বাইরে</span>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Partner Share & Equity Calculator (২, ৩, ৪+ পার্টনারের শেয়ার ও ইনভেস্টমেন্ট সমীকরণ) */}
+      {partners.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-4 space-y-4">
+          <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                <Scale className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>{language === 'bn' ? 'পার্টনারশিপ শেয়ার ও ইনভেস্টমেন্ট সমীকরণ' : 'Partnership Equity & Share Calculator'}</span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">
+                    {formatNumber(partners.length, language)} মালিকানাভিত্তিক
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-400">
+                  {language === 'bn'
+                    ? 'শেয়ার অনুপাত অনুযায়ী কে কত ইনভেস্ট করার কথা ও বকেয়া/পাওনার হিসাব'
+                    : 'Target investment vs actual paid by share percentage'}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Share Presets for 2, 3, 4 Partners */}
+            {canManage && partners.length >= 2 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-slate-500 font-semibold">শেয়ার প্রিসেট:</span>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => applySharePreset('equal')}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 transition"
+                  title="সকল পার্টনারের মাঝে সমান অনুপাত বণ্টন"
+                >
+                  {partners.length === 2
+                    ? '৫০% - ৫০%'
+                    : partners.length === 3
+                    ? '৩৩.৩% সমবণ্টন'
+                    : partners.length === 4
+                    ? '২৫% সমবণ্টন'
+                    : 'সমান শেয়ার'}
+                </button>
+                {partners.length === 3 && (
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => applySharePreset('40_30_30')}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold border border-slate-200 transition"
+                  >
+                    ৪০% - ৩০% - ৩০%
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Equity Breakdown Cards for Each Partner */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {equityAnalysis.map((item) => {
+              return (
+                <div
+                  key={item.partner.id}
+                  className={`p-3.5 rounded-2xl border transition space-y-2.5 ${
+                    item.isUnderfunded
+                      ? 'bg-rose-50/50 border-rose-200'
+                      : item.isOverfunded
+                      ? 'bg-blue-50/50 border-blue-200'
+                      : 'bg-emerald-50/40 border-emerald-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center ${
+                          item.partner.role === 'partner'
+                            ? 'bg-indigo-100 text-indigo-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {item.partner.name.substring(0, 1).toUpperCase()}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 block leading-tight">
+                          {item.partner.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          শেয়ার: <strong className="text-indigo-700">{formatNumber(item.share, language)}%</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        item.isUnderfunded
+                          ? 'bg-rose-100 text-rose-800'
+                          : item.isOverfunded
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}
+                    >
+                      {item.isUnderfunded
+                        ? 'বকেয়া / শর্টফল'
+                        : item.isOverfunded
+                        ? 'অগ্রিম / উদ্বৃত্ত'
+                        : 'সমতায় আছে'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5 py-1.5 px-2 bg-white/80 rounded-xl border border-slate-100 text-center text-xs">
+                    <div>
+                      <span className="text-[9px] text-slate-400 block">টার্গেট ইনভেস্ট</span>
+                      <span className="font-bold text-slate-700">
+                        {formatCurrency(item.targetByShare, language)}
+                      </span>
+                    </div>
+                    <div className="border-x border-slate-100">
+                      <span className="text-[9px] text-emerald-600 block">মোট জমা</span>
+                      <span className="font-bold text-emerald-700">
+                        {formatCurrency(item.actualPaid, language)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 block">অবশিষ্ট বকেয়া</span>
+                      <span
+                        className={`font-black ${
+                          item.due > 0 ? 'text-rose-600' : 'text-emerald-600'
+                        }`}
+                      >
+                        {item.due > 0 ? formatCurrency(item.due, language) : '৳০'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Inter-partner equity statement */}
+                  <div className="text-[11px] leading-relaxed">
+                    {item.isUnderfunded ? (
+                      <p className="text-rose-700">
+                        ⚠️ নির্ধারিত {formatNumber(item.share, language)}% শেয়ার অনুযায়ী এখনো{' '}
+                        <strong>{formatCurrency(Math.abs(item.diffVsShare), language)}</strong> টাকা জমা দেওয়া বাকি।
+                      </p>
+                    ) : item.isOverfunded ? (
+                      <p className="text-blue-700">
+                        ✨ নির্ধারিত {formatNumber(item.share, language)}% শেয়ারের চেয়ে{' '}
+                        <strong>{formatCurrency(item.diffVsShare, language)}</strong> টাকা অতিরিক্ত জমা আছে।
+                      </p>
+                    ) : (
+                      <p className="text-emerald-700">
+                        ✅ অংশীদারিত্ব চুক্তি অনুযায়ী সম্পূর্ণ ইনভেস্টমেন্ট পরিশোধিত ও সমতায় আছে।
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Inter-Partner Due Settlement Suggestions */}
+          {settlementSuggestions.length > 0 && (
+            <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                <ArrowRightLeft className="w-3.5 h-3.5 text-amber-700" />
+                <span>পারস্পরিক দেনা-পাওনা সমন্বয় সুপারিশ:</span>
+              </div>
+              <ul className="list-disc list-inside text-[11px] text-amber-900 space-y-0.5">
+                {settlementSuggestions.map((sug, i) => (
+                  <li key={i}>{sug}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Inter-Partner Due & Balance Explanation Banner */}
       {partnersWithDues.length > 0 && (
@@ -1122,10 +1415,10 @@ export const PartnershipTab: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-800">
-                    {language === 'bn' ? 'মূলধন কিস্তি জমা দিন' : 'Add Capital Installment'}
+                    {language === 'bn' ? 'নতুন ইনভেস্টমেন্ট / কিস্তি জমা' : 'Add Capital Installment'}
                   </h3>
                   <p className="text-xs text-slate-400">
-                    পার্টনার: <strong className="text-slate-700">{selectedPartner.name}</strong>
+                    {language === 'bn' ? 'যেকোনো পার্টনারের নামে কিস্তি জমা দিন' : 'Deposit capital for any partner'}
                   </p>
                 </div>
               </div>
@@ -1137,12 +1430,57 @@ export const PartnershipTab: React.FC = () => {
               </button>
             </div>
 
-            {/* Current Due summary */}
-            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center justify-between text-xs">
-              <span className="text-rose-800 font-medium">বর্তমান ইনভেস্টমেন্ট বকেয়া:</span>
-              <span className="text-sm font-bold text-rose-700">
-                {formatCurrency(selectedPartner.dueAmount, language)}
-              </span>
+            {/* Partner Dropdown Selector */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-700">
+                {language === 'bn' ? 'পার্টনার সিলেক্ট করুন *' : 'Select Partner *'}
+              </label>
+              <select
+                value={selectedPartner.id}
+                onChange={(e) => {
+                  const targetPartner = partners.find((p) => p.id === e.target.value);
+                  if (targetPartner) {
+                    setSelectedPartner(targetPartner);
+                    setInstallmentAmount(targetPartner.dueAmount > 0 ? String(targetPartner.dueAmount) : '');
+                    setInstallmentNotes(`বকেয়া মূলধন কিস্তি জমা (${targetPartner.name})`);
+                  }
+                }}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              >
+                {partners.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.role === 'partner' ? 'পার্টনার' : 'ইনভেস্টর'} — {p.dueAmount > 0 ? `বকেয়া: ৳${formatNumber(p.dueAmount, language)}` : 'বকেয়া নেই'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Selected Partner Status Summary */}
+            <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
+              <div>
+                <span className="text-[10px] text-slate-500 block">চুক্তিবদ্ধ</span>
+                <span className="text-xs font-bold text-slate-800">
+                  {formatCurrency(selectedPartner.committedAmount, language)}
+                </span>
+              </div>
+              <div className="border-x border-slate-200">
+                <span className="text-[10px] text-emerald-600 block">মোট জমা</span>
+                <span className="text-xs font-bold text-emerald-700">
+                  {formatCurrency(selectedPartner.paidAmount, language)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-rose-500 block">বকেয়া ডিউ</span>
+                <span
+                  className={`text-xs font-black ${
+                    selectedPartner.dueAmount > 0 ? 'text-rose-600' : 'text-emerald-600'
+                  }`}
+                >
+                  {selectedPartner.dueAmount > 0
+                    ? formatCurrency(selectedPartner.dueAmount, language)
+                    : '৳০ (পরিশোধিত)'}
+                </span>
+              </div>
             </div>
 
             <form onSubmit={handleCapitalSubmit} className="space-y-3">

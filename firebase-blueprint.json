@@ -294,6 +294,47 @@
         "paidAmount",
         "purchaseDate"
       ]
+    },
+    "FixedAsset": {
+      "title": "FixedAsset",
+      "description": "Shop fixed assets (furniture, showcases, display boxes, tools, equipment) distinct from operating expenses.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Asset name or description"
+        },
+        "cost": {
+          "type": "number",
+          "description": "Asset purchase/construction cost"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of asset"
+        },
+        "purchaseDate": {
+          "type": "string",
+          "description": "Date of purchase (YYYY-MM-DD)"
+        },
+        "fundedBy": {
+          "type": "string",
+          "description": "Partner or fund that financed this asset"
+        },
+        "invoiceNo": {
+          "type": "string",
+          "description": "Challan/invoice/memo number"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Location, warranty, or description notes"
+        }
+      },
+      "required": [
+        "name",
+        "cost",
+        "category",
+        "purchaseDate"
+      ]
     }
   },
   "firestore": {
@@ -332,6 +373,12 @@
         "$ref": "#/entities/SupplierDue"
       },
       "description": "Wholesaler and supplier debts ledger."
+    },
+    "/shops/{shopId}/fixedAssets/{assetId}": {
+      "schema": {
+        "$ref": "#/entities/FixedAsset"
+      },
+      "description": "Fixed assets and furniture/equipment ledger."
     }
   }
 }

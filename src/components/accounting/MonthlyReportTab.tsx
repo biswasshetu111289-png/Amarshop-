@@ -32,6 +32,7 @@ import {
   Printer,
   Sparkles,
   Users,
+  Armchair,
 } from 'lucide-react';
 
 interface MonthlyReportTabProps {
@@ -45,6 +46,8 @@ export const MonthlyReportTab: React.FC<MonthlyReportTabProps> = ({ onNavigateTa
     products,
     partners,
     supplierDues,
+    fixedAssets,
+    totalFixedAssetsAmount,
     currentShop,
     isViewer,
   } = useStore();
@@ -877,6 +880,38 @@ export const MonthlyReportTab: React.FC<MonthlyReportTabProps> = ({ onNavigateTa
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Fixed Assets Capital Summary Notice (চলতি খরচের বাইরে স্থায়ী মূলধন) */}
+      {totalFixedAssetsAmount > 0 && (
+        <div className="bg-amber-50/70 border border-amber-200/80 rounded-3xl p-3.5 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0">
+              <Armchair className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-amber-950 block">
+                {language === 'bn' ? 'দোকানের মোট স্থায়ী সম্পদ (Fixed Assets)' : 'Store Fixed Assets Value'}
+              </span>
+              <span className="text-[11px] text-amber-800/80">
+                {formatNumber(fixedAssets.length, language)} টি সরঞ্জাম (ফার্নিচার, শোকেস, ডেকোরেশন) — মূলধনে সংরক্ষিত, নিট লাভে প্রভাব ফেলে না
+              </span>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-sm font-black text-amber-800 block">
+              {formatCurrency(totalFixedAssetsAmount, language)}
+            </span>
+            {onNavigateTab && (
+              <button
+                onClick={() => onNavigateTab('fixed_assets')}
+                className="text-[10px] text-indigo-600 font-bold hover:underline"
+              >
+                খাতা দেখুন &rarr;
+              </button>
+            )}
           </div>
         </div>
       )}

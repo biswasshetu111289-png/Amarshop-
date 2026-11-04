@@ -34,13 +34,21 @@ import {
   Receipt,
   Users,
   BarChart3,
+  Armchair,
 } from 'lucide-react';
 import { SupplierDuesTab } from './accounting/SupplierDuesTab';
 import { ExpensesTab } from './accounting/ExpensesTab';
 import { PartnershipTab } from './accounting/PartnershipTab';
 import { MonthlyReportTab } from './accounting/MonthlyReportTab';
+import { FixedAssetsTab } from './accounting/FixedAssetsTab';
 
-export type DuesSubTab = 'customer' | 'supplier' | 'expenses' | 'partnership' | 'monthly_report';
+export type DuesSubTab =
+  | 'customer'
+  | 'supplier'
+  | 'expenses'
+  | 'fixed_assets'
+  | 'partnership'
+  | 'monthly_report';
 
 interface CreditDuesViewProps {
   initialSubTab?: DuesSubTab;
@@ -230,6 +238,18 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
           </button>
 
           <button
+            onClick={() => setActiveSubTab('fixed_assets')}
+            className={`flex-1 min-w-[75px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
+              activeSubTab === 'fixed_assets'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Armchair className="w-3.5 h-3.5 text-amber-600" />
+            <span className="truncate">{language === 'bn' ? 'স্থায়ী সম্পদ' : 'Fixed Assets'}</span>
+          </button>
+
+          <button
             onClick={() => setActiveSubTab('partnership')}
             className={`flex-1 min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shrink-0 ${
               activeSubTab === 'partnership'
@@ -263,6 +283,7 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
       {/* Render Other Accounting Sub-Tabs only for Admin/Manager */}
       {!isViewer && activeSubTab === 'supplier' && <SupplierDuesTab />}
       {!isViewer && activeSubTab === 'expenses' && <ExpensesTab />}
+      {!isViewer && activeSubTab === 'fixed_assets' && <FixedAssetsTab />}
       {!isViewer && activeSubTab === 'partnership' && <PartnershipTab />}
       {!isViewer && activeSubTab === 'monthly_report' && (
         <MonthlyReportTab onNavigateTab={(tab) => setActiveSubTab(tab as DuesSubTab)} />

@@ -25,6 +25,7 @@ import {
   SupplierDue,
   CapitalContribution,
   SupplierPayment,
+  FixedAsset,
 } from '../types';
 
 // Collection references
@@ -64,6 +65,14 @@ export const getSupplierDuesCollection = (targetId: string) => {
   }
   return collection(db, 'shops', targetId, 'supplier_dues');
 };
+
+export const getFixedAssetsCollection = (targetId: string) => {
+  if (targetId.startsWith('usr_') || targetId === 'demo_store_owner') {
+    return collection(db, 'users', targetId, 'fixed_assets');
+  }
+  return collection(db, 'shops', targetId, 'fixedAssets');
+};
+
 
 /**
  * Generate a 6-character clean alphanumeric invite code
@@ -1635,3 +1644,65 @@ export async function deleteSupplierDue(targetId: string, dueId: string): Promis
   const colRef = getSupplierDuesCollection(targetId);
   await deleteDoc(doc(colRef, dueId));
 }
+
+// ============================================================================
+// FIXED ASSETS (স্থায়ী সম্পদ খাতা - ফার্নিচার, ডিসপ্লে বক্স, শোকেস, ডেকোরেশন ইত্যাদি)
+// এটি চলতি খরচের অন্তর্ভুক্ত নয় এবং নিট প্রফিট থেকে বাদ যায় না।
+// ============================================================================
+
+/**
+ * Add a new fixed asset record
+ */
+export async function addFixedAsset(
+  targetId: string,
+  asset: Omit<FixedAsset, 'id' | 'createdAt'>
+): Promise<string> {
+  const colRef = getFixedAssetsCollection(targetId);
+  const docRef = doc(colRef);
+  const cost = Number(asset.cost) || 0;
+
+  await setDoc(docRef, {
+    name: (asset.name || '').trim(),
+    cost,
+    category: asset.category || 'অন্যান্য স্থায়ী সম্পদ',
+    purchaseDate: asset.purchaseDate || new Date().toISOString().split('T')[0],
+    fundedBy: (asset.fundedBy || '').trim(),
+    invoiceNo: (asset.invoiceNo || '').trim(),
+    notes: (asset.notes || '').trim(),
+    createdAt: serverTimestamp(),
+  });
+
+  return docRef.id;
+}
+
+/**
+ * Update an existing fixed asset
+ */
+export async function updateFixedAsset(
+  targetId: string,
+  assetId: string,
+  data: Partial<FixedAsset>
+): Promise<void> {
+  const colRef = getFixedAssetsCollection(targetId);
+  const docRef = doc(colRef, assetId);
+  const updatePayload: Record<string, any> = {};
+
+  if (data.name !== undefined) updatePayload.name = data.name.trim();
+  if (data.cost !== undefined) updatePayload.cost = Number(data.cost) || 0;
+  if (data.category !== undefined) updatePayload.category = data.category;
+  if (data.purchaseDate !== undefined) updatePayload.purchaseDate = data.purchaseDate;
+  if (data.fundedBy !== undefined) updatePayload.fundedBy = (data.fundedBy || '').trim();
+  if (data.invoiceNo !== undefined) updatePayload.invoiceNo = (data.invoiceNo || '').trim();
+  if (data.notes !== undefined) updatePayload.notes = (data.notes || '').trim();
+
+  await updateDoc(docRef, updatePayload);
+}
+
+/**
+ * Delete a fixed asset record
+ */
+export async function deleteFixedAsset(targetId: string, assetId: string): Promise<void> {
+  const colRef = getFixedAssetsCollection(targetId);
+  await deleteDoc(doc(colRef, assetId));
+}
+

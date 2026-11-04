@@ -27,6 +27,10 @@ import {
   updateSupplierDue as apiUpdateSupplierDue,
   paySupplierDue as apiPaySupplierDue,
   deleteSupplierDue as apiDeleteSupplierDue,
+  getFixedAssetsCollection,
+  addFixedAsset as apiAddFixedAsset,
+  updateFixedAsset as apiUpdateFixedAsset,
+  deleteFixedAsset as apiDeleteFixedAsset,
   isEmailMatch,
 } from '../services/storeService';
 import {
@@ -39,6 +43,7 @@ import {
   Expense,
   PartnerInvestor,
   SupplierDue,
+  FixedAsset,
 } from '../types';
 import { restoreBackupIntoShop, checkAndExecuteAutoBackup } from '../services/backupService';
 
@@ -122,6 +127,14 @@ export interface StoreContextType {
     options?: { date?: string; paymentMethod?: string; notes?: string; recordExpense?: boolean }
   ) => Promise<void>;
   deleteSupplierDue: (dueId: string) => Promise<void>;
+
+  // Fixed Assets (দোকানের স্থায়ী সম্পদ - ফার্নিচার, ডিসপ্লে বক্স, শোকেস ইত্যাদি)
+  fixedAssets: FixedAsset[];
+  loadingFixedAssets: boolean;
+  totalFixedAssetsAmount: number;
+  addFixedAsset: (asset: Omit<FixedAsset, 'id' | 'createdAt'>) => Promise<string>;
+  updateFixedAsset: (assetId: string, data: Partial<FixedAsset>) => Promise<void>;
+  deleteFixedAsset: (assetId: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType>({
@@ -181,6 +194,13 @@ const StoreContext = createContext<StoreContextType>({
   updateSupplierDue: async () => {},
   paySupplierDue: async () => {},
   deleteSupplierDue: async () => {},
+
+  fixedAssets: [],
+  loadingFixedAssets: true,
+  totalFixedAssetsAmount: 0,
+  addFixedAsset: async () => '',
+  updateFixedAsset: async () => {},
+  deleteFixedAsset: async () => {},
 });
 
 const getUserActiveShopKey = (uid: string) => `amar_business_active_shop_${uid}`;
@@ -206,6 +226,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [supplierDues, setSupplierDues] = useState<SupplierDue[]>([]);
   const [loadingSupplierDues, setLoadingSupplierDues] = useState(true);
+
+  const [fixedAssets, setFixedAssets] = useState<FixedAsset[]>([]);
+  const [loadingFixedAssets, setLoadingFixedAssets] = useState(true);
 
   // Switch shop helper - saves active shop ID uniquely per user
   const setCurrentShop = useCallback((shop: Shop) => {
@@ -704,6 +727,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => unsubscribe();
   }, [targetStoreId]);
 
+  // Subscribe to fixed assets of current shop
+  useEffect(() => {
+    if (!targetStoreId) {
+      setFixedAssets([]);
+      setLoadingFixedAssets(false);
+      return;
+    }
+
+    setLoadingFixedAssets(true);
+    const q = query(getFixedAssetsCollection(targetStoreId), orderBy('purchaseDate', 'desc'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: FixedAsset[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          items.push({
+            id: docSnap.id,
+            name: data.name || '',
+            cost: Number(data.cost) || 0,
+            category: data.category || 'অন্যান্য স্থায়ী সম্পদ',
+            purchaseDate: data.purchaseDate || '',
+            fundedBy: data.fundedBy || '',
+            invoiceNo: data.invoiceNo || '',
+            notes: data.notes || '',
+            createdAt: data.createdAt,
+          });
+        });
+        setFixedAssets(items);
+        setLoadingFixedAssets(false);
+      },
+      (error) => {
+        console.error('Error fetching fixed assets:', error);
+        setLoadingFixedAssets(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [targetStoreId]);
+
   // Product buy price map for calculating profit
   const productBuyPriceMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -802,6 +865,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const totalSupplierDuesAmount = useMemo(() => {
     return supplierDues.reduce((sum, d) => sum + (Number(d.dueAmount) || 0), 0);
   }, [supplierDues]);
+
+  // Fixed assets total (স্থায়ী সম্পদ মোট মূলধন - চলতি খরচের সাথে যুক্ত নয়)
+  const totalFixedAssetsAmount = useMemo(() => {
+    return fixedAssets.reduce((sum, a) => sum + (Number(a.cost) || 0), 0);
+  }, [fixedAssets]);
 
   // Partner capital calculations
   const { totalCommittedCapital, totalPaidCapital, totalCapitalDue } = useMemo(() => {
@@ -942,6 +1010,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [targetStoreId]
   );
 
+  const addFixedAsset = useCallback(
+    async (asset: Omit<FixedAsset, 'id' | 'createdAt'>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      return await apiAddFixedAsset(targetStoreId, asset);
+    },
+    [targetStoreId]
+  );
+
+  const updateFixedAsset = useCallback(
+    async (assetId: string, data: Partial<FixedAsset>) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiUpdateFixedAsset(targetStoreId, assetId, data);
+    },
+    [targetStoreId]
+  );
+
+  const deleteFixedAsset = useCallback(
+    async (assetId: string) => {
+      if (!targetStoreId) throw new Error('দোকান সিলেক্ট করা নেই');
+      await apiDeleteFixedAsset(targetStoreId, assetId);
+    },
+    [targetStoreId]
+  );
+
   const value: StoreContextType = {
     currentShop,
     shops,
@@ -1002,6 +1094,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     updateSupplierDue,
     paySupplierDue,
     deleteSupplierDue,
+
+    // Fixed Assets
+    fixedAssets,
+    loadingFixedAssets,
+    totalFixedAssetsAmount,
+    addFixedAsset,
+    updateFixedAsset,
+    deleteFixedAsset,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -240,3 +240,32 @@ export interface SupplierDue {
   notes?: string;
   createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;
 }
+
+// ---------------------------------------------
+// Fixed Asset Management Types (দোকানের স্থায়ী সম্পদ - ফার্নিচার, ডেকোরেশন, ডিসপ্লে বক্স ইত্যাদি)
+// এটি চলতি খরচের অন্তর্ভুক্ত নয় এবং নিট লাভ থেকে বাদ যায় না; এটি মূলধনী স্থায়ী সম্পদ।
+// ---------------------------------------------
+export const FIXED_ASSET_CATEGORIES = [
+  'ফার্নিচার ও ডেকোরেশন',
+  'ডিসপ্লে বক্স ও শোকেস',
+  'টুলস ও যন্ত্রপাতি',
+  'ইলেকট্রনিক্স ও গ্যাজেটস',
+  'সাইনবোর্ড ও লাইটিং',
+  'ফ্যান, এসি ও কুলিং',
+  'অন্যান্য স্থায়ী সম্পদ',
+] as const;
+
+export type FixedAssetCategory = (typeof FIXED_ASSET_CATEGORIES)[number];
+
+export interface FixedAsset {
+  id: string;
+  name: string; // যেমন: "গ্লাস ডিসপ্লে কাউন্টার", "কাস্টম ক্যাশ ডেস্ক", "টুলকিট সেট"
+  cost: number; // মোট ক্রয় বা তৈরির খরচ (৳)
+  category: FixedAssetCategory | string;
+  purchaseDate: string; // ক্রয়ের তারিখ (YYYY-MM-DD)
+  fundedBy?: string; // কোন পার্টনার বা ফান্ড থেকে অর্থায়ন (যেমন: "পার্টনারশিপ ফান্ড", "পার্টনার ১")
+  invoiceNo?: string; // রসিদ বা মেমো নং
+  notes?: string; // অবস্থান, গ্যারান্টি বা বিবরণ
+  createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;
+}
+
