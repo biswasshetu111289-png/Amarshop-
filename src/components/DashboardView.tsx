@@ -37,6 +37,7 @@ import {
   User,
   Phone,
   BarChart3,
+  Scale,
 } from 'lucide-react';
 import { NavTab } from './BottomNav';
 import { DuesSubTab } from './CreditDuesView';
@@ -132,6 +133,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   }, [sales, todayStr]);
 
   const recentSales = sales.slice(0, 5);
+
+  // Dashboard Partner Equalization Balances (যৌথ মূলধন ও ক্যাপিটাল ব্যালেন্স)
+  const dashboardPartnerBalances = useMemo(() => {
+    const totalJoint = partners.reduce((sum, p) => sum + (Number(p.paidAmount) || 0), 0);
+    return partners.map((p) => {
+      const share = p.profitShareRatio || (partners.length > 0 ? 100 / partners.length : 50);
+      const equalizedTarget = Math.round((totalJoint * share) / 100);
+      const balance = (Number(p.paidAmount) || 0) - equalizedTarget;
+      return {
+        id: p.id,
+        name: p.name,
+        share,
+        paid: Number(p.paidAmount) || 0,
+        equalizedTarget,
+        balance,
+      };
+    });
+  }, [partners]);
 
   const openEditModal = (sale: Sale) => {
     if (!canManage) {
@@ -594,6 +613,83 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           </div>
         </div>
+
+        {/* Joint Capital & Partner Equalization Hub Card (যৌথ মূলধন ও ক্যাপিটাল গ্যাপ) */}
+        {partners.length >= 2 && (
+          <div
+            onClick={() => onNavigate('dues', 'partnership')}
+            className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-blue-50/90 border border-indigo-200/90 hover:border-indigo-300 transition cursor-pointer space-y-2.5 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <Scale className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span>{language === 'bn' ? 'যৌথ মূলধন ও ব্যালেন্স সমন্বয়' : 'Joint Capital & Equalization'}</span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded font-bold">
+                      {language === 'bn' ? 'ক্যাপিটাল গ্যাপ' : 'Capital Gap'}
+                    </span>
+                  </h4>
+                  <p className="text-[10px] text-slate-500">
+                    {language === 'bn' ? 'মোট যৌথ মূলধন:' : 'Total Joint Capital:'}{' '}
+                    <strong className="text-indigo-700 font-bold">{formatCurrency(totalPaidCapital, language)}</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 text-xs text-indigo-600 font-bold group-hover:translate-x-0.5 transition">
+                <span>{language === 'bn' ? 'বিস্তারিত' : 'Details'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            {/* Equalization Status for Partners */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              {dashboardPartnerBalances.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-2 rounded-xl border text-xs flex flex-col justify-between ${
+                    item.balance > 0
+                      ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                      : item.balance < 0
+                      ? 'bg-rose-50/80 border-rose-200 text-rose-950'
+                      : 'bg-white/80 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="truncate max-w-[85px]">{item.name}</span>
+                    <span className="text-[10px] opacity-75">{item.share}% শেয়ার</span>
+                  </div>
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <span className="text-[10px] text-slate-500">জমা: ৳{formatNumber(item.paid, language)}</span>
+                    <span
+                      className={`text-[11px] font-black px-1.5 py-0.2 rounded ${
+                        item.balance > 0
+                          ? 'bg-emerald-200 text-emerald-900'
+                          : item.balance < 0
+                          ? 'bg-rose-200 text-rose-900'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {item.balance > 0
+                        ? `+৳${formatNumber(item.balance, language)} পাওনা`
+                        : item.balance < 0
+                        ? `-৳${formatNumber(Math.abs(item.balance), language)} ঘাটতি`
+                        : '৳০ সমতায়'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-[10px] text-indigo-900/80 flex items-center justify-between pt-0.5">
+              <span>💡 ক্যাশ বা লাভ উত্তোলনের সময় এই হিসাব সমন্বয়যোগ্য</span>
+              <span className="font-semibold text-indigo-700">৫০%-৫০% শেয়ার অক্ষুণ্ণ থাকবে</span>
+            </div>
+          </div>
+        )}
 
         {/* Hub Action: Monthly & Business Report */}
         <div

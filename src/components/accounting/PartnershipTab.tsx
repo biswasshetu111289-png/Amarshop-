@@ -400,6 +400,12 @@ export const PartnershipTab: React.FC = () => {
       const actualPaid = Number(p.paidAmount) || 0;
       const due = p.dueAmount;
       const diffVsShare = actualPaid - targetByShare;
+
+      // Equalized share of currently paid total joint capital (যৌথ মূলধনের সমতা)
+      const equalizedTargetOfPaid = Math.round((totalPaidCapital * share) / 100);
+      // Capital balance relative to actual joint pool (পজিটিভ পাওনা vs নেগেটিভ ঘাটতি)
+      const capitalAdjustmentBalance = actualPaid - equalizedTargetOfPaid;
+
       return {
         partner: p,
         share,
@@ -407,27 +413,39 @@ export const PartnershipTab: React.FC = () => {
         actualPaid,
         due,
         diffVsShare,
-        isUnderfunded: diffVsShare < -5,
-        isOverfunded: diffVsShare > 5,
-        isBalanced: Math.abs(diffVsShare) <= 5,
+        equalizedTargetOfPaid,
+        capitalAdjustmentBalance,
+        isUnderfunded: capitalAdjustmentBalance < -5,
+        isOverfunded: capitalAdjustmentBalance > 5,
+        isBalanced: Math.abs(capitalAdjustmentBalance) <= 5,
       };
     });
-  }, [partners, totalCommittedCapital]);
+  }, [partners, totalCommittedCapital, totalPaidCapital]);
+
+  // Overall Capital Gap between highest and lowest contributor
+  const capitalGap = useMemo(() => {
+    if (partners.length < 2) return 0;
+    const amounts = partners.map((p) => Number(p.paidAmount) || 0);
+    return Math.max(...amounts) - Math.min(...amounts);
+  }, [partners]);
+
+  // State for Equalization & Settlement Guide modal
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
 
   // Inter-partner dues pairs (কার কাছে কে কত পাবে/দিবে)
   const settlementSuggestions = useMemo(() => {
     type EquityItem = (typeof equityAnalysis)[number];
-    const overfunded = equityAnalysis.filter((e: EquityItem) => e.diffVsShare > 10);
-    const underfunded = equityAnalysis.filter((e: EquityItem) => e.diffVsShare < -10);
+    const overfunded = equityAnalysis.filter((e: EquityItem) => e.capitalAdjustmentBalance > 10);
+    const underfunded = equityAnalysis.filter((e: EquityItem) => e.capitalAdjustmentBalance < -10);
 
     const suggestions: string[] = [];
     if (overfunded.length > 0 && underfunded.length > 0) {
       for (const under of underfunded) {
         for (const over of overfunded) {
-          const settlementAmt = Math.min(Math.abs(under.diffVsShare), over.diffVsShare);
+          const settlementAmt = Math.min(Math.abs(under.capitalAdjustmentBalance), over.capitalAdjustmentBalance);
           if (settlementAmt > 10) {
             suggestions.push(
-              `ইনভেস্টমেন্ট সমতার জন্য ${under.partner.name} থেকে ${over.partner.name} ৳${formatNumber(settlementAmt, language)} প্রাপ্য।`
+              `সমতার জন্য ${under.partner.name} থেকে ${over.partner.name} ৳${formatNumber(settlementAmt, language)} প্রাপ্য (যা ক্যাশ উত্তোলন বা লাভ বণ্টনে সমন্বয়যোগ্য)।`
             );
           }
         }
@@ -475,11 +493,11 @@ export const PartnershipTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 2: Total Contributed / Paid Capital */}
+        {/* Card 2: Total Joint Capital (মোট যৌথ মূলধন) */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-500">
-              {language === 'bn' ? 'জমা প্রদত্ত মূলধন' : 'Paid Capital'}
+              {language === 'bn' ? 'মোট যৌথ মূলধন' : 'Total Joint Capital'}
             </span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4" />
@@ -490,12 +508,7 @@ export const PartnershipTab: React.FC = () => {
               {formatCurrency(totalPaidCapital, language)}
             </div>
             <div className="text-[11px] text-emerald-600 font-medium mt-0.5">
-              {totalCommittedCapital > 0
-                ? `${formatNumber(
-                    Math.round((totalPaidCapital / totalCommittedCapital) * 100),
-                    language
-                  )}% সংগৃহীত`
-                : '০%'}
+              {language === 'bn' ? 'একত্রিত প্রাথমিক ও পরবর্তী সকল কিস্তি' : 'Total combined capital pool'}
             </div>
           </div>
         </div>
@@ -708,17 +721,40 @@ export const PartnershipTab: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Capital Adjustment / Equalization Balance Badge */}
+                  <div className="p-2 rounded-xl bg-white/90 border border-slate-100 flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-slate-700 flex items-center gap-1">
+                      <Scale className="w-3 h-3 text-indigo-600" />
+                      <span>পার্টনার ব্যালেন্স:</span>
+                    </span>
+                    <span
+                      className={`font-black px-2 py-0.5 rounded text-[10px] ${
+                        item.capitalAdjustmentBalance > 5
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : item.capitalAdjustmentBalance < -5
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {item.capitalAdjustmentBalance > 5
+                        ? `+${formatCurrency(item.capitalAdjustmentBalance, language)} (পাওনা / Receivable)`
+                        : item.capitalAdjustmentBalance < -5
+                        ? `-${formatCurrency(Math.abs(item.capitalAdjustmentBalance), language)} (ঘাটতি / Payable)`
+                        : '৳০ (সমতায় আছে)'}
+                    </span>
+                  </div>
+
                   {/* Inter-partner equity statement */}
                   <div className="text-[11px] leading-relaxed">
                     {item.isUnderfunded ? (
                       <p className="text-rose-700">
-                        ⚠️ নির্ধারিত {formatNumber(item.share, language)}% শেয়ার অনুযায়ী এখনো{' '}
-                        <strong>{formatCurrency(Math.abs(item.diffVsShare), language)}</strong> টাকা জমা দেওয়া বাকি।
+                        ⚠️ ৫০%-৫০% সমতায় <strong>-{formatCurrency(Math.abs(item.capitalAdjustmentBalance), language)}</strong> ঘাটতি রয়েছে।
+                        ক্যাশ বা লাভ উত্তোলনের সময় এই ব্যালেন্স সমন্বয়যোগ্য।
                       </p>
                     ) : item.isOverfunded ? (
                       <p className="text-blue-700">
-                        ✨ নির্ধারিত {formatNumber(item.share, language)}% শেয়ারের চেয়ে{' '}
-                        <strong>{formatCurrency(item.diffVsShare, language)}</strong> টাকা অতিরিক্ত জমা আছে।
+                        ✨ ৫০%-৫০% সমতায় <strong>+{formatCurrency(item.capitalAdjustmentBalance, language)}</strong> অতিরিক্ত পাওনা রয়েছে।
+                        ক্যাশ বা লাভ উত্তোলনের সময় এই টাকা সমন্বয়যোগ্য।
                       </p>
                     ) : (
                       <p className="text-emerald-700">
@@ -731,20 +767,41 @@ export const PartnershipTab: React.FC = () => {
             })}
           </div>
 
-          {/* Inter-Partner Due Settlement Suggestions */}
-          {settlementSuggestions.length > 0 && (
-            <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl text-xs space-y-1">
+          {/* Inter-Partner Due Settlement Suggestions & Capital Gap */}
+          <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl text-xs space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-1.5 font-bold text-amber-950">
                 <ArrowRightLeft className="w-3.5 h-3.5 text-amber-700" />
-                <span>পারস্পরিক দেনা-পাওনা সমন্বয় সুপারিশ:</span>
+                <span>পারস্পরিক দেনা-পাওনা ও ক্যাপিটাল গ্যাপ:</span>
+                {capitalGap > 0 && (
+                  <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                    গ্যাপ: ৳{formatNumber(capitalGap, language)}
+                  </span>
+                )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setShowSettlementModal(true)}
+                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold rounded-lg text-[10px] shadow-xs flex items-center gap-1 transition"
+              >
+                <Info className="w-3 h-3" />
+                <span>ব্যালেন্স সমন্বয় সহায়িকা</span>
+              </button>
+            </div>
+
+            {settlementSuggestions.length > 0 ? (
               <ul className="list-disc list-inside text-[11px] text-amber-900 space-y-0.5">
                 {settlementSuggestions.map((sug, i) => (
                   <li key={i}>{sug}</li>
                 ))}
               </ul>
-            </div>
-          )}
+            ) : (
+              <p className="text-[11px] text-emerald-800 font-medium">
+                ✅ উভয় পার্টনারের মূলধন বর্তমানে সম্পূর্ণ সমান ও সমতায় আছে।
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -1038,6 +1095,68 @@ export const PartnershipTab: React.FC = () => {
                       </span>
                     </div>
                   )}
+
+                  {/* Capital Equalization & Balance Adjustment (ক্যাপিটাল অ্যাডজাস্টমেন্ট / পার্টনার ব্যালেন্স) */}
+                  {partners.length >= 2 && (() => {
+                    const ratio = partner.profitShareRatio || (partners.length > 0 ? 100 / partners.length : 50);
+                    const equalizedTarget = Math.round((totalPaidCapital * ratio) / 100);
+                    const capitalBalance = (Number(partner.paidAmount) || 0) - equalizedTarget;
+
+                    return (
+                      <div
+                        className={`p-2.5 rounded-xl border text-xs space-y-1.5 transition ${
+                          capitalBalance > 5
+                            ? 'bg-emerald-50/70 border-emerald-200'
+                            : capitalBalance < -5
+                            ? 'bg-rose-50/70 border-rose-200'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                            <Scale className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{language === 'bn' ? 'ক্যাপিটাল অ্যাডজাস্টমেন্ট ব্যালেন্স:' : 'Capital Balance:'}</span>
+                          </span>
+                          <span
+                            className={`font-black text-[11px] px-2 py-0.5 rounded-md ${
+                              capitalBalance > 5
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : capitalBalance < -5
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {capitalBalance > 5
+                              ? `+${formatCurrency(capitalBalance, language)} (পাওনা / Receivable)`
+                              : capitalBalance < -5
+                              ? `-${formatCurrency(Math.abs(capitalBalance), language)} (ঘাটতি / Payable)`
+                              : '৳০ (সমতায় আছে)'}
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] leading-relaxed text-slate-600">
+                          {capitalBalance > 5 ? (
+                            <p className="text-emerald-800">
+                              ✨ <strong>পজিটিভ ব্যালেন্স:</strong> মোট যৌথ মূলধনে {formatNumber(ratio, language)}% সমতার চেয়ে{' '}
+                              <strong>+{formatCurrency(capitalBalance, language)}</strong> অতিরিক্ত মূলধন দিয়েছেন (ব্যবসা/অপর পার্টনারের নিকট পাওনা)।
+                            </p>
+                          ) : capitalBalance < -5 ? (
+                            <p className="text-rose-800">
+                              ⚠️ <strong>নেতিবাচক ব্যালেন্স:</strong> মোট যৌথ মূলধনে {formatNumber(ratio, language)}% সমতার চেয়ে{' '}
+                              <strong>-{formatCurrency(Math.abs(capitalBalance), language)}</strong> ঘাটতি রয়েছে (পরিশোধযোগ্য)।
+                            </p>
+                          ) : (
+                            <p className="text-slate-600">
+                              ✅ মোট যৌথ মূলধনে {formatNumber(ratio, language)}% শেয়ার সমতা বজায় রয়েছে।
+                            </p>
+                          )}
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            💡 পরবর্তীতে লাভ বা ক্যাশ উত্তোলনের সময় এই হিসাব সমন্বয় করা যাবে; তবে এটি মূল লাভ শেয়ারিং নিয়মে ({formatNumber(ratio, language)}%) কোনো প্রভাব ফেলবে না।
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Actions Bar: Add Capital installment button & Expand contributions button */}
                   <div className="flex items-center justify-between pt-1">
@@ -1895,6 +2014,151 @@ export const PartnershipTab: React.FC = () => {
                   <span>{language === 'bn' ? 'হ্যাঁ, মুছুন' : 'Delete'}</span>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: CAPITAL EQUALIZATION & SETTLEMENT GUIDE MODAL */}
+      {/* ========================================================================= */}
+      {showSettlementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <Scale className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    {language === 'bn' ? 'ক্যাপিটাল গ্যাপ ও ব্যালেন্স সমন্বয় সহায়িকা' : 'Capital Equalization Guide'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {language === 'bn' ? '৫০%-৫০% সমতায় ব্যালেন্স সমন্বয়ের পদ্ধতি' : 'How to settle & offset partner balances'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSettlementModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Current Joint Pool & Gap Overview */}
+            <div className="grid grid-cols-2 gap-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl text-xs">
+              <div>
+                <span className="text-[10px] text-slate-500 block">মোট যৌথ মূলধন (Joint Capital)</span>
+                <span className="text-sm font-bold text-indigo-700">
+                  {formatCurrency(totalPaidCapital, language)}
+                </span>
+              </div>
+              <div className="border-l border-indigo-200 pl-3">
+                <span className="text-[10px] text-slate-500 block">বর্তমান ক্যাপিটাল গ্যাপ</span>
+                <span className="text-sm font-black text-rose-600">
+                  ৳{formatNumber(capitalGap, language)}
+                </span>
+              </div>
+            </div>
+
+            {/* Current Partner Balances List */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-700">বর্তমান পার্টনার ব্যালেন্স স্থিতি:</h4>
+              <div className="space-y-1.5">
+                {equityAnalysis.map((item) => (
+                  <div
+                    key={item.partner.id}
+                    className="p-2.5 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <strong className="text-slate-800 font-bold block">{item.partner.name}</strong>
+                      <span className="text-[10px] text-slate-500">
+                        জমা: {formatCurrency(item.actualPaid, language)} ({item.share}% শেয়ার)
+                      </span>
+                    </div>
+                    <span
+                      className={`text-xs font-black px-2 py-0.5 rounded-md ${
+                        item.capitalAdjustmentBalance > 5
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : item.capitalAdjustmentBalance < -5
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {item.capitalAdjustmentBalance > 5
+                        ? `+${formatCurrency(item.capitalAdjustmentBalance, language)} (পাওনা)`
+                        : item.capitalAdjustmentBalance < -5
+                        ? `-${formatCurrency(Math.abs(item.capitalAdjustmentBalance), language)} (ঘাটতি)`
+                        : '৳০ (সমতায়)'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Resolution Options */}
+            <div className="space-y-2.5 pt-1">
+              <h4 className="text-xs font-bold text-slate-800">ব্যালেন্স সমন্বয়ের দুটি সহজ পদ্ধতি:</h4>
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1 text-xs">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[10px] flex items-center justify-center">
+                    ১
+                  </span>
+                  <span>কিস্তি জমা দিয়ে মূলধন সমতায় আনা</span>
+                </div>
+                <p className="text-[11px] text-slate-600 pl-6 leading-relaxed">
+                  ঘাটতি থাকা পার্টনার যেকোনো সময় "নতুন ইনভেস্টমেন্ট জমা দিন" অপশন ব্যবহার করে কিস্তি পরিশোধ করতে পারেন।
+                </p>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1 text-xs">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center">
+                    ২
+                  </span>
+                  <span>লাভ বা ক্যাশ উত্তোলনের সময় সমন্বয় (Offsetting)</span>
+                </div>
+                <p className="text-[11px] text-slate-600 pl-6 leading-relaxed">
+                  পরবর্তীতে ব্যবসা থেকে যখন মাসিক বা ত্রৈমাসিক লাভ/ক্যাশ উত্তোলন করা হবে, তখন ঘাটতি থাকা পার্টনারের উত্তোলিত লাভ থেকে এই ব্যালেন্স সমন্বয় করে পাওনাদার পার্টনারকে দেওয়া যাবে।
+                </p>
+              </div>
+            </div>
+
+            {/* Golden Rule Notice */}
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[11px] text-emerald-900 space-y-1 leading-relaxed">
+              <div className="font-bold flex items-center gap-1 text-emerald-950">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>মূল লাভ শেয়ারিং নিয়ম সুরক্ষিত:</span>
+              </div>
+              <p>
+                এই ক্যাপিটাল অ্যাডজাস্টমেন্ট ব্যবস্থা শুধুমাত্র ইনভেস্টমেন্টের দেনা-পাওনা ট্র্যাকিংয়ের জন্য। আপনাদের যৌথ চুক্তি অনুযায়ী মূল লাভ শেয়ারিংয়ের হার (যেমন ৫০% - ৫০%) সবসময় সম্পূর্ণ অক্ষুণ্ণ ও অপরিবর্তিত থাকবে।
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSettlementModal(false)}
+                className="w-1/2 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition"
+              >
+                {language === 'bn' ? 'ঠিক আছে' : 'Got It'}
+              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSettlementModal(false);
+                    handleQuickAddInvestment();
+                  }}
+                  className="w-1/2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow transition flex items-center justify-center gap-1"
+                >
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>{language === 'bn' ? 'নতুন কিস্তি জমা' : 'Add Installment'}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
