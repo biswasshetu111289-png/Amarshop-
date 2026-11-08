@@ -69,6 +69,8 @@ export const StockView: React.FC<StockViewProps> = ({ initialFilter = 'available
     isViewer,
     totalInventoryBuyValue,
     totalInventorySellValue,
+    allTimeTotalPurchaseCost,
+    allTimeTotalPurchaseUnits,
   } = useStore();
   const { showToast } = useToast();
   const { language, t } = useLanguage();
@@ -649,6 +651,18 @@ export const StockView: React.FC<StockViewProps> = ({ initialFilter = 'available
                 {language === 'bn' ? 'বিক্রয়মূল্য ও ক্রয়মূল্যের পার্থক্য' : 'Expected stock margin'}
               </div>
             </div>
+          </div>
+
+          {/* All-time Acquired Stock Valuation pill */}
+          <div className="mt-3 pt-2.5 border-t border-indigo-700/40 flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-100">
+            <span className="flex items-center gap-1.5 font-medium">
+              <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+              <span>{language === 'bn' ? 'বিজনেস শুরু থেকে এ পর্যন্ত সর্বমোট ক্রয়মূল্য:' : 'All-Time Acquired Purchase Cost:'}</span>
+              <strong className="text-yellow-300 font-bold">{formatCurrency(allTimeTotalPurchaseCost, language)}</strong>
+            </span>
+            <span className="text-[11px] bg-white/10 px-2.5 py-0.5 rounded-lg border border-white/15 text-blue-200 font-medium">
+              {language === 'bn' ? `মোট ক্রয়কৃত পণ্য: ${formatNumber(allTimeTotalPurchaseUnits, language)} টি` : `Total Acquired: ${formatNumber(allTimeTotalPurchaseUnits, language)} units`}
+            </span>
           </div>
         </div>
       )}

@@ -93,6 +93,14 @@ export interface StoreContextType {
   totalInventorySellValue: number;
   lowStockProducts: Product[];
 
+  // All-time purchase cost & inventory metrics (বিজনেস শুরু থেকে সর্বমোট ক্রয় ও পণ্য)
+  allTimeTotalPurchaseCost: number;
+  allTimeTotalPurchaseUnits: number;
+  totalCostOfGoodsSold: number;
+  allTimeSalesAmount: number;
+  totalSoldUnits: number;
+  availableStockUnits: number;
+
   // Expenses & Actual Net Profit
   expenses: Expense[];
   loadingExpenses: boolean;
@@ -166,6 +174,13 @@ const StoreContext = createContext<StoreContextType>({
   totalInventoryBuyValue: 0,
   totalInventorySellValue: 0,
   lowStockProducts: [],
+
+  allTimeTotalPurchaseCost: 0,
+  allTimeTotalPurchaseUnits: 0,
+  totalCostOfGoodsSold: 0,
+  allTimeSalesAmount: 0,
+  totalSoldUnits: 0,
+  availableStockUnits: 0,
 
   expenses: [],
   loadingExpenses: true,
@@ -894,12 +909,55 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Inventory asset valuation (মোট মজুদের ক্রয়মূল্য ও বিক্রয়মূল্য)
   const totalInventoryBuyValue = useMemo(() => {
-    return products.reduce((acc, p) => acc + (p.qty > 0 ? Number(p.qty) * (Number(p.buyPrice) || 0) : 0), 0);
+    return products.reduce((acc, p) => {
+      if (p.qty <= 0) return acc;
+      const unitBuy = (Number(p.buyPrice) || 0) + (Number(p.packagingPrice) || 0);
+      return acc + Number(p.qty) * unitBuy;
+    }, 0);
   }, [products]);
 
   const totalInventorySellValue = useMemo(() => {
     return products.reduce((acc, p) => acc + (p.qty > 0 ? Number(p.qty) * (Number(p.sellPrice) || 0) : 0), 0);
   }, [products]);
+
+  // Current in-stock units (বর্তমান মজুদ পরিমাণ)
+  const availableStockUnits = useMemo(() => {
+    return products.reduce((acc, p) => acc + (p.qty > 0 ? Number(p.qty) : 0), 0);
+  }, [products]);
+
+  // All-time COGS, sold units, and all-time sales (বিক্রিত মালের ক্রয়মূল্য ও মোট ইউনিট)
+  const { totalCostOfGoodsSold, totalSoldUnits, allTimeSalesAmount } = useMemo(() => {
+    let cogs = 0;
+    let units = 0;
+    let salesTotal = 0;
+    for (const s of sales) {
+      const q = Number(s.qty) || 0;
+      units += q;
+      salesTotal += Number(s.total) || 0;
+      let unitCost = 0;
+      if (s.productId && productBuyPriceMap.has(s.productId)) {
+        unitCost = productBuyPriceMap.get(s.productId)!;
+      } else if (s.productName && productBuyPriceMap.has(s.productName.trim().toLowerCase())) {
+        unitCost = productBuyPriceMap.get(s.productName.trim().toLowerCase())!;
+      }
+      cogs += unitCost * q;
+    }
+    return {
+      totalCostOfGoodsSold: cogs,
+      totalSoldUnits: units,
+      allTimeSalesAmount: salesTotal,
+    };
+  }, [sales, productBuyPriceMap]);
+
+  // All-time total purchase cost (শুরু হতে সর্বমোট পণ্যের ক্রয়মূল্য = বর্তমান মজুদ পণ্যের ক্রয়মূল্য + বিক্রিত পণ্যের ক্রয়মূল্য)
+  const allTimeTotalPurchaseCost = useMemo(() => {
+    return totalInventoryBuyValue + totalCostOfGoodsSold;
+  }, [totalInventoryBuyValue, totalCostOfGoodsSold]);
+
+  // All-time total acquired product units (শুরু হতে সর্বমোট সংগৃহীত/ক্রয়কৃত পিস/একক)
+  const allTimeTotalPurchaseUnits = useMemo(() => {
+    return availableStockUnits + totalSoldUnits;
+  }, [availableStockUnits, totalSoldUnits]);
 
   // Accounting Action Callbacks
   const addExpense = useCallback(
@@ -1063,6 +1121,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     totalInventoryBuyValue,
     totalInventorySellValue,
     lowStockProducts,
+
+    // All-time purchase cost & inventory metrics
+    allTimeTotalPurchaseCost,
+    allTimeTotalPurchaseUnits,
+    totalCostOfGoodsSold,
+    allTimeSalesAmount,
+    totalSoldUnits,
+    availableStockUnits,
 
     // Expenses
     expenses,

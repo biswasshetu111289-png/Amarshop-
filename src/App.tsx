@@ -3,9 +3,12 @@ import { useAuth } from './context/AuthContext';
 import { useStore } from './context/StoreContext';
 import { useLanguage } from './context/LanguageContext';
 import { useTheme } from './context/ThemeContext';
+import { useViewMode } from './context/ViewModeContext';
 import { AuthView } from './components/AuthView';
 import { Header } from './components/Header';
+import { DesktopNav } from './components/DesktopNav';
 import { BottomNav, NavTab } from './components/BottomNav';
+import { ViewModeModal } from './components/ViewModeModal';
 import { DashboardView } from './components/DashboardView';
 import { StockView } from './components/StockView';
 import { SaleEntryView } from './components/SaleEntryView';
@@ -20,6 +23,7 @@ export default function App() {
   const { lowStockProducts, customerDues, supplierDues } = useStore();
   const { language } = useLanguage();
   const { themeId, activeTheme, customBg } = useTheme();
+  const { isDesktop } = useViewMode();
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [duesSubTab, setDuesSubTab] = useState<DuesSubTab>('customer');
   const [stockInitialFilter, setStockInitialFilter] = useState<'available' | 'all' | 'zero'>('available');
@@ -75,11 +79,31 @@ export default function App() {
       {/* App Update Notification Banner */}
       <UpdateNotificationBanner />
 
-      {/* Top Mobile Sticky Header */}
+      {/* Top Header */}
       <Header />
 
-      {/* Main Content Area: Centered container up to 600px */}
-      <main className="flex-1 w-full max-w-[600px] mx-auto px-3.5 pt-4 pb-24">
+      {/* Desktop Top Navigation Bar (Only on Desktop mode) */}
+      {isDesktop && (
+        <DesktopNav
+          currentTab={currentTab}
+          onSelectTab={(tab) => {
+            if (tab === 'dues') {
+              setDuesSubTab('customer');
+            }
+            setCurrentTab(tab);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          lowStockCount={lowStockProducts.length}
+          duesCount={totalDuesBadgeCount}
+        />
+      )}
+
+      {/* Main Content Area: Responsive container (max-w-[600px] on mobile, max-w-7xl on desktop) */}
+      <main
+        className={`flex-1 w-full mx-auto transition-all duration-300 ${
+          isDesktop ? 'max-w-7xl px-6 pt-6 pb-12' : 'max-w-[600px] px-3.5 pt-4 pb-24'
+        }`}
+      >
         <PWAInstallBanner variant="banner" />
         {currentTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
         {currentTab === 'stock' && <StockView initialFilter={stockInitialFilter} />}
@@ -93,19 +117,24 @@ export default function App() {
       {/* Offline Connectivity Notification */}
       <OfflineIndicator />
 
-      {/* Fixed Bottom Navigation */}
-      <BottomNav
-        currentTab={currentTab}
-        onSelectTab={(tab) => {
-          if (tab === 'dues') {
-            setDuesSubTab('customer');
-          }
-          setCurrentTab(tab);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-        lowStockCount={lowStockProducts.length}
-        duesCount={totalDuesBadgeCount}
-      />
+      {/* View Mode Switcher Modal */}
+      <ViewModeModal />
+
+      {/* Fixed Bottom Navigation (Only on Mobile mode) */}
+      {!isDesktop && (
+        <BottomNav
+          currentTab={currentTab}
+          onSelectTab={(tab) => {
+            if (tab === 'dues') {
+              setDuesSubTab('customer');
+            }
+            setCurrentTab(tab);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          lowStockCount={lowStockProducts.length}
+          duesCount={totalDuesBadgeCount}
+        />
+      )}
     </div>
   );
 }

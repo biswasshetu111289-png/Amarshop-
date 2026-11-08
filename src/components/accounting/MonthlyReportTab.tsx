@@ -50,6 +50,9 @@ export const MonthlyReportTab: React.FC<MonthlyReportTabProps> = ({ onNavigateTa
     totalFixedAssetsAmount,
     currentShop,
     isViewer,
+    allTimeTotalPurchaseCost,
+    allTimeTotalPurchaseUnits,
+    totalInventoryBuyValue,
   } = useStore();
 
   const { language } = useLanguage();
@@ -568,7 +571,9 @@ export const MonthlyReportTab: React.FC<MonthlyReportTabProps> = ({ onNavigateTa
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">
-                {language === 'bn' ? 'পণ্য ক্রয় খরচ (COGS)' : 'Cost of Goods'}
+                {language === 'bn'
+                  ? (reportScope === 'all_time' ? 'বিক্রিত মালের ক্রয় (COGS)' : 'পণ্য ক্রয় খরচ (COGS)')
+                  : 'Cost of Goods'}
               </span>
               <div className="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
                 <Coins className="w-3.5 h-3.5" />
@@ -581,10 +586,21 @@ export const MonthlyReportTab: React.FC<MonthlyReportTabProps> = ({ onNavigateTa
               <div className="text-[10px] text-slate-500 mt-1">
                 গ্রস লাভ: {formatCurrency(grossProfit, language)}
               </div>
+              {reportScope === 'all_time' && (
+                <div className="mt-1.5 pt-1 border-t border-amber-100/80 text-[10px] text-amber-900 font-semibold flex items-center justify-between">
+                  <span>{language === 'bn' ? 'শুরু হতে মোট ক্রয়:' : 'Total Acquired:'}</span>
+                  <span className="text-amber-800 font-bold">{formatCurrency(allTimeTotalPurchaseCost, language)}</span>
+                </div>
+              )}
             </div>
           </div>
-          <div className="text-[10px] text-slate-400 mt-2 pt-1 border-t border-slate-100">
-            {language === 'bn' ? 'মালের মূল ক্রয় ও প্যাকেজিং' : 'Base buy & packaging'}
+          <div className="text-[10px] text-slate-400 mt-2 pt-1 border-t border-slate-100 flex items-center justify-between">
+            <span>{language === 'bn' ? 'মালের মূল ক্রয় ও প্যাকেজিং' : 'Base buy & packaging'}</span>
+            {reportScope === 'all_time' && (
+              <span className="font-semibold text-indigo-600">
+                {formatNumber(allTimeTotalPurchaseUnits, language)} {language === 'bn' ? 'টি পণ্য' : 'units'}
+              </span>
+            )}
           </div>
         </div>
 

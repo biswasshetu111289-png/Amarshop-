@@ -68,9 +68,13 @@ import {
   Palette,
   EyeOff,
   AlertTriangle,
+  Monitor,
+  Smartphone,
+  Laptop,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useViewMode } from '../context/ViewModeContext';
 import { PWAInstallBanner } from './PWAInstallBanner';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth } from '../firebase';
@@ -79,6 +83,7 @@ export const Header: React.FC = () => {
   const { user, logout, requestPasswordReset } = useAuth();
   const { language, setLanguage, toggleLanguage, t } = useLanguage();
   const { activeTheme, themeId, customBg, setShowThemeModal } = useTheme();
+  const { viewMode, isDesktop, setShowViewModeModal } = useViewMode();
   const {
     currentShop,
     shops,
@@ -653,7 +658,7 @@ export const Header: React.FC = () => {
   return (
     <>
       <header className={`sticky top-0 z-40 ${headerBgClass} transition-colors duration-300`} style={headerCustomStyle}>
-        <div className="max-w-[600px] mx-auto px-3.5 py-2.5 flex items-center justify-between">
+        <div className={`mx-auto px-3.5 py-2.5 flex items-center justify-between transition-all duration-300 ${isDesktop ? 'max-w-7xl px-6' : 'max-w-[600px]'}`}>
           {/* Shop Switcher & Title */}
           <div className="flex items-center gap-2.5">
             <button
@@ -723,6 +728,29 @@ export const Header: React.FC = () => {
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5">
+            {/* View Mode Switcher Button (ডেস্কটপ / মোবাইল ভিউ) */}
+            <button
+              type="button"
+              onClick={() => setShowViewModeModal(true)}
+              title={
+                language === 'bn'
+                  ? `ভিউ মোড নির্বাচন (বর্তমান: ${viewMode === 'desktop' ? 'ডেস্কটপ' : viewMode === 'mobile' ? 'মোবাইল' : 'অটো'})`
+                  : `Change Layout View (Current: ${viewMode})`
+              }
+              className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 text-white transition flex items-center gap-1.5 text-xs font-bold border border-white/20 shadow-xs cursor-pointer"
+            >
+              {isDesktop ? (
+                <Monitor className="w-3.5 h-3.5 text-cyan-300" />
+              ) : (
+                <Smartphone className="w-3.5 h-3.5 text-cyan-300" />
+              )}
+              <span className="hidden sm:inline">
+                {language === 'bn'
+                  ? (viewMode === 'desktop' ? 'ডেস্কটপ' : viewMode === 'mobile' ? 'মোবাইল' : 'অটো ভিউ')
+                  : (viewMode === 'desktop' ? 'Desktop' : viewMode === 'mobile' ? 'Mobile' : 'Auto View')}
+              </span>
+            </button>
+
             {/* Global Theme & Color Customizer Button */}
             <button
               type="button"

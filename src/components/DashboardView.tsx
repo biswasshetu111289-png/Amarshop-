@@ -38,6 +38,7 @@ import {
   Phone,
   BarChart3,
   Scale,
+  Layers,
 } from 'lucide-react';
 import { NavTab } from './BottomNav';
 import { DuesSubTab } from './CreditDuesView';
@@ -66,6 +67,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     grossProfitAmount,
     netProfitAmount,
     totalInventoryBuyValue,
+    allTimeTotalPurchaseCost,
+    allTimeTotalPurchaseUnits,
+    totalCostOfGoodsSold,
+    allTimeSalesAmount,
+    totalSoldUnits,
     totalExpensesAmount,
     totalSupplierDuesAmount,
     totalCommittedCapital,
@@ -336,9 +342,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         </button>
       </div>
 
-      {/* 4 Stat Cards in 2x2 Grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Card 1: Total Products */}
+      {/* 4 Stat Cards: 2x2 on mobile, 4 columns on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Available Product Stock (বর্তমান এভেইলেবল স্টক) */}
         <div
           onClick={() => onNavigate('stock', undefined, 'available')}
@@ -373,10 +378,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
                 {/* Total Buy Value for Admin/Manager */}
                 {!isViewer && (
-                  <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 flex items-center justify-between">
-                    <span>{language === 'bn' ? 'মজুদ ক্রয়মূল্য:' : 'Buy Value:'}</span>
-                    <span className="font-bold">{formatCurrency(totalInventoryBuyValue, language)}</span>
-                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 flex items-center justify-between">
+                      <span>{language === 'bn' ? 'মজুদ ক্রয়মূল্য:' : 'In-Stock Cost:'}</span>
+                      <span className="font-bold">{formatCurrency(totalInventoryBuyValue, language)}</span>
+                    </span>
+                    <span
+                      className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100 flex items-center justify-between"
+                      title="বিজনেস শুরু থেকে এ পর্যন্ত সর্বমোট কত টাকার পণ্য ক্রয় করা হয়েছে"
+                    >
+                      <span>{language === 'bn' ? 'শুরু হতে মোট ক্রয়:' : 'All-time Buy:'}</span>
+                      <span className="font-bold">{formatCurrency(allTimeTotalPurchaseCost, language)}</span>
+                    </span>
+                  </div>
                 )}
 
                 {/* Out of stock alert badge if zeroStockProductsCount > 0 */}
@@ -451,85 +465,224 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         {/* Card 3: Total Due/Credit */}
         <div
           onClick={() => onNavigate('dues')}
-          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-amber-200 transition cursor-pointer group"
+          className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-amber-200 transition cursor-pointer group flex flex-col justify-between"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">
-              {language === 'bn' ? 'মোট বাকি' : 'Total Dues'}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition">
-              <AlertCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-xl font-bold text-rose-600">
-              {formatCurrency(totalDuesAmount, language)}
-            </div>
-            <div className="text-[11px] text-amber-600 flex items-center gap-0.5 mt-0.5">
-              <span>{language === 'bn' ? 'বাকি খাতা দেখুন' : 'View Due Khata'}</span>
-              <ArrowUpRight className="w-3 h-3" />
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Actual Net Profit (for Admin/Manager) or Today's Sales History (for Viewer) */}
-        {!isViewer ? (
-          <div
-            onClick={() => onNavigate('dues', 'monthly_report')}
-            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group"
-          >
+          <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">
-                {language === 'bn' ? 'একচুয়াল নিট লাভ' : 'Actual Net Profit'}
+                {language === 'bn' ? 'মোট বাকি' : 'Total Dues'}
               </span>
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition">
-                <TrendingUp className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition">
+                <AlertCircle className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2">
-              <div
-                className={`text-xl font-bold ${
-                  netProfitAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                }`}
-              >
-                {formatCurrency(netProfitAmount, language)}
+              <div className="text-xl font-bold text-rose-600">
+                {formatCurrency(totalDuesAmount, language)}
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                {totalExpensesAmount > 0
-                  ? language === 'bn'
-                    ? `খরচ বাদ দিয়ে আসল লাভ`
-                    : `After costs`
-                  : language === 'bn'
-                  ? 'বিক্রি ও খরচ সমন্বিত লাভ'
-                  : 'Revenue minus costs'}
+              <div className="mt-1 text-[10px] text-slate-500">
+                {language === 'bn' ? 'গ্রাহক ও পাইকার বাকি সমন্বিত' : 'Customer & Supplier dues'}
               </div>
+            </div>
+          </div>
+          <div className="text-[11px] text-amber-600 flex items-center gap-0.5 mt-2 pt-1 border-t border-slate-100/60">
+            <span>{language === 'bn' ? 'বাকি খাতা দেখুন' : 'View Due Khata'}</span>
+            <ArrowUpRight className="w-3 h-3" />
+          </div>
+        </div>
+
+        {/* Card 4: Actual Net Profit (for Admin/Manager) or Total Records (for Viewer) */}
+        {!isViewer ? (
+          <div
+            onClick={() => onNavigate('dues', 'monthly_report')}
+            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 transition cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">
+                  {language === 'bn' ? 'একচুয়াল নিট লাভ' : 'Actual Net Profit'}
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2">
+                <div
+                  className={`text-xl font-bold ${
+                    netProfitAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                  }`}
+                >
+                  {formatCurrency(netProfitAmount, language)}
+                </div>
+                
+                {/* All-time purchase cost insight right below Profit */}
+                <div className="mt-1 flex flex-col gap-1">
+                  <span
+                    className="text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md flex items-center justify-between"
+                    title="বিজনেস শুরু থেকে এ পর্যন্ত সর্বমোট পণ্য ক্রয়মূল্য"
+                  >
+                    <span className="text-slate-500">{language === 'bn' ? 'শুরু হতে মোট ক্রয়:' : 'All-time Buy:'}</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(allTimeTotalPurchaseCost, language)}</span>
+                  </span>
+                  <span
+                    className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center justify-between"
+                    title="বিজনেস শুরু থেকে এ পর্যন্ত সর্বমোট বিক্রি"
+                  >
+                    <span className="text-emerald-700">{language === 'bn' ? 'মোট বিক্রয়:' : 'Total Sales:'}</span>
+                    <span className="font-bold">{formatCurrency(allTimeSalesAmount, language)}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="text-[11px] text-indigo-600 flex items-center gap-0.5 mt-2 pt-1 border-t border-slate-100/60">
+              <span>{language === 'bn' ? 'মাসিক রিপোর্ট ও লাভ' : 'Monthly Report'}</span>
+              <ArrowUpRight className="w-3 h-3" />
             </div>
           </div>
         ) : (
           <div
             onClick={() => onNavigate('history')}
-            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition cursor-pointer group"
+            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition cursor-pointer group flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500">
-                {language === 'bn' ? 'মোট লেনদেন' : 'Total Transactions'}
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
-                <Receipt className="w-4 h-4" />
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">
+                  {language === 'bn' ? 'মোট লেনদেন' : 'Total Transactions'}
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
+                  <Receipt className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2">
+                <div className="text-xl font-bold text-slate-800">
+                  {formatNumber(sales.length, language)} {language === 'bn' ? 'টি' : 'records'}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  {language === 'bn' ? 'সর্বমোট সম্পন্ন হওয়া বিক্রি' : 'All recorded sales'}
+                </div>
               </div>
             </div>
-            <div className="mt-2">
-              <div className="text-xl font-bold text-slate-800">
-                {formatNumber(sales.length, language)} {language === 'bn' ? 'টি' : 'records'}
-              </div>
-              <div className="text-[11px] text-blue-600 flex items-center gap-0.5 mt-0.5">
-                <span>{language === 'bn' ? 'বিক্রির খাতা দেখুন' : 'View sales history'}</span>
-                <ArrowUpRight className="w-3 h-3" />
-              </div>
+            <div className="text-[11px] text-blue-600 flex items-center gap-0.5 mt-2 pt-1 border-t border-slate-100/60">
+              <span>{language === 'bn' ? 'বিক্রির খাতা দেখুন' : 'View sales history'}</span>
+              <ArrowUpRight className="w-3 h-3" />
             </div>
           </div>
         )}
       </div>
+
+      {/* অল-টাইম ব্যবসায়িক সামারি ও সর্বমোট পণ্য ক্রয় হিসাব (All-Time Business Acquisition & Investment Summary) */}
+      {!isViewer && (
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 text-white rounded-2xl p-4 sm:p-5 shadow-md border border-indigo-500/25 space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-yellow-300 border border-indigo-400/30 flex items-center justify-center shrink-0 shadow-xs">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-bold text-white">
+                    {language === 'bn'
+                      ? 'বিজনেস শুরু হতে সর্বমোট পণ্য ক্রয় ও বিনিয়োগ সামারি'
+                      : 'All-Time Inventory Acquisition & Business Summary'}
+                  </h3>
+                  <span className="text-[10px] bg-yellow-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase">
+                    {language === 'bn' ? 'অল-টাইম' : 'All-Time'}
+                  </span>
+                </div>
+                <p className="text-xs text-blue-200/90 mt-0.5">
+                  {language === 'bn'
+                    ? 'বিজনেস শুরু থেকে এ পর্যন্ত কত টাকার কতগুলো পণ্য ক্রয় ও বিক্রি হয়েছে তার পূর্ণাঙ্গ চিত্র'
+                    : 'Complete insight into total purchase valuation, acquired quantity & sales margin'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('dues', 'monthly_report')}
+              className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-xs font-bold text-blue-100 flex items-center gap-1.5 border border-white/20 transition cursor-pointer shrink-0"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-yellow-300" />
+              <span>{language === 'bn' ? 'গ্রাফ ও আর্থিক রিপোর্ট' : 'Graph & Report'}</span>
+            </button>
+          </div>
+
+          {/* 4 Multi-Column Stat Boxes */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 pt-1">
+            {/* Box 1: All-time Total Purchase */}
+            <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs p-3 rounded-xl border border-white/15 transition flex flex-col justify-between">
+              <div>
+                <div className="text-[11px] text-blue-200 font-medium flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                  <span>{language === 'bn' ? 'সর্বমোট পণ্য ক্রয়মূল্য' : 'Total Purchase Cost'}</span>
+                </div>
+                <div className="text-lg sm:text-xl font-black text-yellow-300 mt-1">
+                  {formatCurrency(allTimeTotalPurchaseCost, language)}
+                </div>
+              </div>
+              <div className="text-[10px] text-blue-100/90 mt-1.5 pt-1.5 border-t border-white/10 font-medium">
+                {language === 'bn'
+                  ? `মোট ${formatNumber(allTimeTotalPurchaseUnits, language)} টি পণ্য কেনা হয়েছে`
+                  : `${formatNumber(allTimeTotalPurchaseUnits, language)} units acquired`}
+              </div>
+            </div>
+
+            {/* Box 2: All-time Total Sales */}
+            <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs p-3 rounded-xl border border-white/15 transition flex flex-col justify-between">
+              <div>
+                <div className="text-[11px] text-emerald-200 font-medium flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>{language === 'bn' ? 'সর্বমোট বিক্রয় মূল্য' : 'Total Sales Revenue'}</span>
+                </div>
+                <div className="text-lg sm:text-xl font-black text-emerald-300 mt-1">
+                  {formatCurrency(allTimeSalesAmount, language)}
+                </div>
+              </div>
+              <div className="text-[10px] text-emerald-200/90 mt-1.5 pt-1.5 border-t border-white/10 font-medium">
+                {language === 'bn'
+                  ? `মোট ${formatNumber(totalSoldUnits, language)} টি পণ্য বিক্রি সম্পন্ন`
+                  : `${formatNumber(totalSoldUnits, language)} units sold`}
+              </div>
+            </div>
+
+            {/* Box 3: Current Unsold Inventory Value */}
+            <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs p-3 rounded-xl border border-white/15 transition flex flex-col justify-between">
+              <div>
+                <div className="text-[11px] text-cyan-200 font-medium flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                  <span>{language === 'bn' ? 'বর্তমান অবিক্রীত মজুদ' : 'Current In-Stock Buy'}</span>
+                </div>
+                <div className="text-lg sm:text-xl font-black text-cyan-300 mt-1">
+                  {formatCurrency(totalInventoryBuyValue, language)}
+                </div>
+              </div>
+              <div className="text-[10px] text-cyan-200/90 mt-1.5 pt-1.5 border-t border-white/10 font-medium">
+                {language === 'bn'
+                  ? `দোকানে আছে ${formatNumber(availableStockQty, language)} টি পণ্য`
+                  : `${formatNumber(availableStockQty, language)} units in stock`}
+              </div>
+            </div>
+
+            {/* Box 4: Total Net Profit */}
+            <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs p-3 rounded-xl border border-white/15 transition flex flex-col justify-between">
+              <div>
+                <div className="text-[11px] text-purple-200 font-medium flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                  <span>{language === 'bn' ? 'সর্বমোট নিট লাভ' : 'Total Net Profit'}</span>
+                </div>
+                <div className={`text-lg sm:text-xl font-black mt-1 ${netProfitAmount >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {formatCurrency(netProfitAmount, language)}
+                </div>
+              </div>
+              <div className="text-[10px] text-purple-200/90 mt-1.5 pt-1.5 border-t border-white/10 font-medium">
+                {language === 'bn'
+                  ? `গ্রস লাভ ৳${formatNumber(grossProfitAmount, language)} (খরচ বাদে)`
+                  : `Gross: ৳${formatNumber(grossProfitAmount, language)}`}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Accounting & Financial Health Hub (শুধুমাত্র এডমিন ও ম্যানেজারের জন্য) */}
       {!isViewer && (
