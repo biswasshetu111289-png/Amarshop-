@@ -22,3 +22,62 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
 }
+
+@media print {
+  @page {
+    margin: 10mm;
+  }
+
+  body.printing-receipt {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.printing-receipt * {
+    visibility: hidden !important;
+  }
+
+  body.printing-receipt .receipt-print-modal {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  body.printing-receipt .receipt-print-card {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body.printing-receipt #printable-money-receipt,
+  body.printing-receipt #printable-money-receipt * {
+    visibility: visible !important;
+  }
+
+  body.printing-receipt #printable-money-receipt {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  body.printing-receipt .no-print {
+    display: none !important;
+  }
+}

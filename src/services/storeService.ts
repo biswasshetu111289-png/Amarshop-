@@ -719,6 +719,7 @@ export async function createSale(
     packagingPrice?: number;
     color?: string;
     notes?: string;
+    invoiceGroupId?: string;
   }
 ): Promise<string> {
   const batch = writeBatch(db);
@@ -743,6 +744,7 @@ export async function createSale(
     packagingPrice: Number(saleData.packagingPrice || 0),
     color: saleData.color || '',
     notes: saleData.notes || '',
+    ...(saleData.invoiceGroupId ? { invoiceGroupId: saleData.invoiceGroupId } : {}),
     createdAt: serverTimestamp(),
   });
 
@@ -756,6 +758,83 @@ export async function createSale(
 
   await batch.commit();
   return newSaleDoc.id;
+}
+
+/**
+ * Record multiple products sold in a single customer checkout/receipt atomically
+ */
+export async function createMultiProductSale(
+  targetId: string,
+  items: Array<{
+    productId: string;
+    productName: string;
+    qty: number;
+    unit: string;
+    price: number;
+    total: number;
+    date: string;
+    payment: 'নগদ' | 'বাকি' | 'আংশিক';
+    paymentMethod?: string;
+    paidAmount: number;
+    dueAmount: number;
+    customer?: string;
+    customerPhone?: string;
+    packagingPrice?: number;
+    color?: string;
+    notes?: string;
+  }>,
+  providedGroupId?: string
+): Promise<Sale[]> {
+  if (items.length === 0) return [];
+
+  const invoiceGroupId =
+    providedGroupId || `MR-${Date.now().toString(36).toUpperCase()}`;
+  const batch = writeBatch(db);
+  const salesRef = getSalesCollection(targetId);
+  const createdSales: Sale[] = [];
+
+  for (const saleData of items) {
+    const newSaleDoc = doc(salesRef);
+    const payload = {
+      productId: saleData.productId,
+      productName: saleData.productName,
+      qty: Number(saleData.qty),
+      unit: saleData.unit,
+      price: Number(saleData.price),
+      total: Number(saleData.total),
+      date: saleData.date,
+      payment: saleData.payment,
+      paymentMethod: saleData.paymentMethod || 'নগদ',
+      paidAmount: Number(saleData.paidAmount),
+      dueAmount: Number(saleData.dueAmount),
+      customer: saleData.customer?.trim() || '',
+      customerPhone: saleData.customerPhone?.trim() || '',
+      packagingPrice: Number(saleData.packagingPrice || 0),
+      color: saleData.color || '',
+      notes: saleData.notes || '',
+      invoiceGroupId,
+    };
+
+    batch.set(newSaleDoc, {
+      ...payload,
+      createdAt: serverTimestamp(),
+    });
+
+    if (saleData.productId) {
+      const prodRef = doc(getProductsCollection(targetId), saleData.productId);
+      batch.update(prodRef, {
+        qty: increment(-Number(saleData.qty)),
+      });
+    }
+
+    createdSales.push({
+      id: newSaleDoc.id,
+      ...payload,
+    });
+  }
+
+  await batch.commit();
+  return createdSales;
 }
 
 /**

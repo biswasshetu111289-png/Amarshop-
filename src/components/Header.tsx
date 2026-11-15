@@ -71,11 +71,13 @@ import {
   Monitor,
   Smartphone,
   Laptop,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useViewMode } from '../context/ViewModeContext';
 import { PWAInstallBanner } from './PWAInstallBanner';
+import { GoogleSheetsSyncModal } from './GoogleSheetsSyncModal';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -106,6 +108,7 @@ export const Header: React.FC = () => {
   const [showJoinShopModal, setShowJoinShopModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showEditShopModal, setShowEditShopModal] = useState(false);
+  const [showSheetsModal, setShowSheetsModal] = useState(false);
 
   // Delete Shop Confirmation State (Password mandatory)
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
@@ -749,6 +752,17 @@ export const Header: React.FC = () => {
                   ? (viewMode === 'desktop' ? 'ডেস্কটপ' : viewMode === 'mobile' ? 'মোবাইল' : 'অটো ভিউ')
                   : (viewMode === 'desktop' ? 'Desktop' : viewMode === 'mobile' ? 'Mobile' : 'Auto View')}
               </span>
+            </button>
+
+            {/* Google Sheets Multi-Shop Sync Button */}
+            <button
+              type="button"
+              onClick={() => setShowSheetsModal(true)}
+              title={language === 'bn' ? 'প্রতিটি শপের ডাটা গুগল শিটে সেভ করুন' : 'Save Shop Data to Google Sheets'}
+              className="px-2.5 py-1.5 rounded-xl bg-emerald-500/25 hover:bg-emerald-500/40 active:scale-95 text-white transition flex items-center gap-1.5 text-xs font-bold border border-emerald-300/35 shadow-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+              <span className="hidden md:inline">{language === 'bn' ? 'গুগল শিট' : 'Sheets'}</span>
             </button>
 
             {/* Global Theme & Color Customizer Button */}
@@ -1545,6 +1559,38 @@ export const Header: React.FC = () => {
                 </button>
               </div>
 
+              {/* Google Sheets Multi-Shop Sync Card */}
+              <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-emerald-950 text-xs">
+                      {language === 'bn'
+                        ? 'গুগল শিট ও এক্সেল ব্যাকআপ (প্রতি শপের আলাদা শিট)'
+                        : 'Google Sheets & Excel Sync (Per-Shop)'}
+                    </h4>
+                    <p className="text-[10px] text-emerald-800">
+                      {language === 'bn'
+                        ? 'সব শপের পণ্য, বিক্রি, খরচ ও বাকি আলাদা গুগল শিটে সেভ রাখুন'
+                        : 'Save every shop to its own Google Spreadsheet'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAccountModal(false);
+                    setShowSheetsModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition cursor-pointer shrink-0"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>{language === 'bn' ? 'সিঙ্ক হাব' : 'Open Sync'}</span>
+                </button>
+              </div>
+
               {/* Data Backup & Restore Suite */}
               <div className="p-3 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 rounded-xl border border-blue-200 space-y-3">
                 <div className="flex items-center justify-between">
@@ -2251,6 +2297,12 @@ export const Header: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Multi-Shop Google Sheets Sync Modal */}
+      <GoogleSheetsSyncModal
+        isOpen={showSheetsModal}
+        onClose={() => setShowSheetsModal(false)}
+      />
     </>
   );
 };

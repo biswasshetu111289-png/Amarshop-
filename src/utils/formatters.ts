@@ -196,3 +196,49 @@ export function getTodayString(): string {
   const d = String(today.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+const EN_ONES = [
+  '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+  'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+  'Seventeen', 'Eighteen', 'Nineteen',
+];
+const EN_TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+function twoDigitsEn(n: number): string {
+  if (n < 20) return EN_ONES[n];
+  return EN_TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + EN_ONES[n % 10] : '');
+}
+
+function numberToEnglishWords(num: number): string {
+  const n = Math.round(Math.abs(num));
+  if (n === 0) return 'Zero Taka Only';
+
+  const parts: string[] = [];
+  const crore = Math.floor(n / 10000000);
+  const lakh = Math.floor((n % 10000000) / 100000);
+  const thousand = Math.floor((n % 100000) / 1000);
+  const hundred = Math.floor((n % 1000) / 100);
+  const rest = n % 100;
+
+  if (crore > 0) parts.push(`${numberToEnglishWords(crore).replace(' Taka Only', '')} Crore`);
+  if (lakh > 0) parts.push(`${twoDigitsEn(lakh)} Lakh`);
+  if (thousand > 0) parts.push(`${twoDigitsEn(thousand)} Thousand`);
+  if (hundred > 0) parts.push(`${EN_ONES[hundred]} Hundred`);
+  if (rest > 0) parts.push(twoDigitsEn(rest));
+
+  return `${parts.join(' ').trim()} Taka Only`;
+}
+
+/**
+ * Convert numeric amount to words for Money Receipt
+ */
+export function amountInWords(amount: number, lang: 'bn' | 'en' = 'bn'): string {
+  const n = Math.round(Math.abs(Number(amount) || 0));
+  if (lang === 'en') {
+    return numberToEnglishWords(n);
+  }
+  // Clean formal Bengali / hybrid standard for Money Receipts in Bangladesh
+  const formatted = toBengaliNumber(n.toLocaleString('en-US'));
+  if (n === 0) return 'শূন্য টাকা মাত্র';
+  return `${numberToEnglishWords(n)} (${formatted} টাকা মাত্র)`;
+}

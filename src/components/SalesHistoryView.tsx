@@ -65,9 +65,38 @@ export const SalesHistoryView: React.FC = () => {
   const [editColor, setEditColor] = useState('');
   const [updatingSale, setUpdatingSale] = useState(false);
   const [detailSale, setDetailSale] = useState<Sale | null>(null);
-  const [invoiceSale, setInvoiceSale] = useState<Sale | null>(null);
+  const [invoiceSales, setInvoiceSales] = useState<Sale[] | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
 
   const targetId = currentShop?.id || user?.uid || '';
+
+  const openReceiptForSale = (sale: Sale) => {
+    if (sale.invoiceGroupId) {
+      const grouped = sales.filter((s) => s.invoiceGroupId === sale.invoiceGroupId);
+      if (grouped.length > 0) {
+        setInvoiceSales(grouped);
+        return;
+      }
+    }
+    setInvoiceSales([sale]);
+  };
+
+  const toggleSelectSale = (saleId: string) => {
+    setSelectedSaleIds((prev) =>
+      prev.includes(saleId) ? prev.filter((id) => id !== saleId) : [...prev, saleId]
+    );
+  };
+
+  const selectedSalesForReceipt = useMemo(
+    () => sales.filter((s) => selectedSaleIds.includes(s.id)),
+    [sales, selectedSaleIds]
+  );
+
+  const selectedTotalAmount = useMemo(
+    () => selectedSalesForReceipt.reduce((sum, s) => sum + Number(s.total || 0), 0),
+    [selectedSalesForReceipt]
+  );
 
   // Product buy price map for calculating profit
   const productBuyPriceMap = useMemo(() => {
@@ -311,8 +340,8 @@ export const SalesHistoryView: React.FC = () => {
         </div>
       )}
 
-      {/* Title */}
-      <div className="flex items-center justify-between">
+      {/* Title & Multi-Select Receipt Toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-bold text-slate-800">
             {language === 'bn' ? 'বিক্রয় ইতিহাস' : 'Sales History'}
@@ -323,7 +352,66 @@ export const SalesHistoryView: React.FC = () => {
               : `Sales records, profit, and adjustments for ${currentShop?.name || 'Shop'}`}
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setSelectMode((prev) => !prev);
+            setSelectedSaleIds([]);
+          }}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+            selectMode
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+              : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+          }`}
+        >
+          <Receipt className="w-3.5 h-3.5" />
+          <span>
+            {selectMode
+              ? language === 'bn'
+                ? 'সিলেক্ট বন্ধ করুন'
+                : 'Exit Multi-Select'
+              : language === 'bn'
+              ? 'একাধিক পণ্যের মানি রিসিট'
+              : 'Combine Receipt'}
+          </span>
+        </button>
       </div>
+
+      {/* Multi-Select Combined Receipt Action Bar */}
+      {selectMode && (
+        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="text-indigo-950 font-semibold">
+            {selectedSaleIds.length === 0 ? (
+              <span>
+                {language === 'bn'
+                  ? 'নিচের তালিকা থেকে যেকোনো ১ বা একাধিক বিক্রি সিলেক্ট করে একটি মানি রিসিট তৈরি করুন।'
+                  : 'Select 1 or more sales below to generate a combined Money Receipt.'}
+              </span>
+            ) : (
+              <span>
+                {language === 'bn'
+                  ? `${toBengaliNumber(selectedSaleIds.length)} টি আইটেম নির্বাচিত • মোট: ${formatCurrency(selectedTotalAmount, language)}`
+                  : `${selectedSaleIds.length} item(s) selected • Total: ${formatCurrency(selectedTotalAmount, language)}`}
+              </span>
+            )}
+          </div>
+          {selectedSaleIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setInvoiceSales(selectedSalesForReceipt)}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center gap-1.5"
+            >
+              <Receipt className="w-3.5 h-3.5" />
+              <span>
+                {language === 'bn'
+                  ? `মানি রিসিট দেখুন (${toBengaliNumber(selectedSaleIds.length)})`
+                  : `View Money Receipt (${selectedSaleIds.length})`}
+              </span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter Card */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
@@ -492,23 +580,55 @@ export const SalesHistoryView: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200/80 text-slate-600 font-bold">
                 <tr>
+                  {selectMode && (
+                    <th className="py-3 pl-3 pr-1 w-8 text-center">✓</th>
+                  )}
                   <th className="py-3 px-3">{language === 'bn' ? 'তারিখ' : 'Date'}</th>
                   <th className="py-3 px-2">{language === 'bn' ? 'প্রোডাক্ট ও ক্রেতা' : 'Product & Customer'}</th>
                   <th className="py-3 px-2 text-center">{language === 'bn' ? 'পরিমাণ' : 'Quantity'}</th>
                   <th className="py-3 px-2 text-right">{language === 'bn' ? 'মূল্য' : 'Amount'}</th>
                   <th className="py-3 px-2 text-center">{language === 'bn' ? 'পেমেন্ট' : 'Payment'}</th>
-                  <th className="py-3 px-2 text-center">{language === 'bn' ? 'ইনভয়েস / অ্যাকশন' : 'Invoice / Action'}</th>
+                  <th className="py-3 px-2 text-center">{language === 'bn' ? 'রিসিট / অ্যাকশন' : 'Receipt / Action'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredSales.map((sale) => (
-                  <tr key={sale.id} onClick={() => setDetailSale(sale)} className="hover:bg-blue-50/60 cursor-pointer transition group">
+                {filteredSales.map((sale) => {
+                  const isChecked = selectedSaleIds.includes(sale.id);
+                  return (
+                  <tr
+                    key={sale.id}
+                    onClick={() => (selectMode ? toggleSelectSale(sale.id) : setDetailSale(sale))}
+                    className={`cursor-pointer transition group ${
+                      isChecked ? 'bg-indigo-50/80' : 'hover:bg-blue-50/60'
+                    }`}
+                  >
+                    {selectMode && (
+                      <td
+                        className="py-2.5 pl-3 pr-1 text-center"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectSale(sale.id);
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 font-medium">
                       {formatBengaliDate(sale.date, language)}
                     </td>
                     <td className="py-2.5 px-2">
-                      <div className="font-semibold text-slate-900 leading-snug">
-                        {sale.productName}
+                      <div className="font-semibold text-slate-900 leading-snug flex flex-wrap items-center gap-1.5">
+                        <span>{sale.productName}</span>
+                        {sale.invoiceGroupId && (
+                          <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded">
+                            #{sale.invoiceGroupId}
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-1 mt-0.5">
                         {sale.customer ? (
@@ -564,8 +684,8 @@ export const SalesHistoryView: React.FC = () => {
                     <td className="py-2.5 px-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => setInvoiceSale(sale)}
-                            title={language === 'bn' ? 'ইনভয়েস ও হোয়াটসঅ্যাপে পাঠান' : 'Invoice & Share'}
+                            onClick={() => openReceiptForSale(sale)}
+                            title={language === 'bn' ? 'মানি রিসিট ও হোয়াটসঅ্যাপে পাঠান' : 'Money Receipt & Share'}
                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
                           >
                             <Receipt className="w-3.5 h-3.5" />
@@ -591,7 +711,8 @@ export const SalesHistoryView: React.FC = () => {
                         </div>
                       </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -605,7 +726,7 @@ export const SalesHistoryView: React.FC = () => {
           onClose={() => setDetailSale(null)}
           onOpenInvoice={(s) => {
             setDetailSale(null);
-            setInvoiceSale(s);
+            openReceiptForSale(s);
           }}
           onEdit={(s) => openEditModal(s)}
           onDelete={(s) => handleDelete(s)}
@@ -613,15 +734,15 @@ export const SalesHistoryView: React.FC = () => {
         />
       )}
 
-      {/* Invoice Modal */}
-      {invoiceSale && (
+      {/* Official Money Receipt Modal */}
+      {invoiceSales && invoiceSales.length > 0 && (
         <InvoiceModal
-          sale={invoiceSale}
+          sales={invoiceSales}
           shopName={currentShop?.name}
           shopPhone={currentShop?.phone}
           shopAddress={currentShop?.address}
           logoUrl={currentShop?.logoUrl}
-          onClose={() => setInvoiceSale(null)}
+          onClose={() => setInvoiceSales(null)}
         />
       )}
 

@@ -8,9 +8,19 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  reauthenticateWithPopup,
+  linkWithPopup,
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { seedSampleProducts } from '../services/storeService';
+
+export const WORKSPACE_SCOPES = [
+  'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/drive.file',
+];
+
+// In-memory cache ONLY (never localStorage/sessionStorage)
+let cachedWorkspaceToken: string | null = null;
 
 export interface AppUser {
   uid: string;
@@ -28,6 +38,10 @@ interface LocalUserRecord {
 interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
+  hasWorkspaceToken: boolean;
+  getWorkspaceToken: () => string | null;
+  connectGoogleWorkspace: () => Promise<string>;
+  clearWorkspaceToken: () => void;
   login: (email: string, pass: string) => Promise<void>;
   register: (email: string, pass: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -42,6 +56,10 @@ const CURRENT_SESSION_KEY = 'amar_business_session_v1';
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  hasWorkspaceToken: false,
+  getWorkspaceToken: () => null,
+  connectGoogleWorkspace: async () => '',
+  clearWorkspaceToken: () => {},
   login: async () => {},
   register: async () => {},
   loginWithGoogle: async () => {},
@@ -86,6 +104,16 @@ function isAuthEmailMatch(e1: string, e2: string): boolean {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasWorkspaceToken, setHasWorkspaceToken] = useState<boolean>(false);
+
+  const clearWorkspaceToken = useCallback(() => {
+    cachedWorkspaceToken = null;
+    setHasWorkspaceToken(false);
+  }, []);
+
+  const getWorkspaceToken = useCallback(() => {
+    return cachedWorkspaceToken;
+  }, []);
 
   // Initialize session from Firebase or LocalStorage
   useEffect(() => {
@@ -100,8 +128,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: fbUser.email,
           displayName: fbUser.displayName,
         });
+        setHasWorkspaceToken(Boolean(cachedWorkspaceToken));
         setLoading(false);
       } else {
+        cachedWorkspaceToken = null;
+        setHasWorkspaceToken(false);
         // If no Firebase Auth user, check local session
         try {
           const savedSession = localStorage.getItem(CURRENT_SESSION_KEY);
@@ -238,11 +269,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Google Sign-In with Firebase Auth
+  // Google Sign-In with Firebase Auth (also requests Workspace scopes)
   const loginWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
+    WORKSPACE_SCOPES.forEach((scope) => provider.addScope(scope));
     provider.setCustomParameters({ prompt: 'select_account' });
     const cred = await signInWithPopup(auth, provider);
+    const oauthCred = GoogleAuthProvider.credentialFromResult(cred);
+    if (oauthCred?.accessToken) {
+      cachedWorkspaceToken = oauthCred.accessToken;
+      setHasWorkspaceToken(true);
+    }
     const appUser: AppUser = {
       uid: cred.user.uid,
       email: cred.user.email,
@@ -250,6 +287,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setUser(appUser);
     localStorage.setItem(CURRENT_SESSION_KEY, JSON.stringify(appUser));
+  }, []);
+
+  // Obtain / refresh Google Workspace access token (Sheets & Drive) via Firebase Auth popup
+  const connectGoogleWorkspace = useCallback(async (): Promise<string> => {
+    const provider = new GoogleAuthProvider();
+    WORKSPACE_SCOPES.forEach((scope) => provider.addScope(scope));
+    provider.setCustomParameters({ prompt: 'consent select_account' });
+
+    let result;
+    const currentFbUser = auth.currentUser;
+    if (currentFbUser) {
+      const hasGoogleProvider = currentFbUser.providerData.some(
+        (p) => p.providerId === 'google.com'
+      );
+      if (hasGoogleProvider) {
+        result = await reauthenticateWithPopup(currentFbUser, provider);
+      } else {
+        try {
+          result = await linkWithPopup(currentFbUser, provider);
+        } catch (linkErr: any) {
+          const code = linkErr?.code || '';
+          if (
+            code.includes('credential-already-in-use') ||
+            code.includes('provider-already-linked') ||
+            code.includes('email-already-in-use')
+          ) {
+            result = await signInWithPopup(auth, provider);
+          } else {
+            throw linkErr;
+          }
+        }
+      }
+    } else {
+      result = await signInWithPopup(auth, provider);
+    }
+
+    const oauthCred = GoogleAuthProvider.credentialFromResult(result);
+    if (!oauthCred?.accessToken) {
+      throw new Error('গুগল শিটস অ্যাক্সেস টোকেন পাওয়া যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।');
+    }
+
+    cachedWorkspaceToken = oauthCred.accessToken;
+    setHasWorkspaceToken(true);
+    return oauthCred.accessToken;
   }, []);
 
   // 1-Click Demo Login
@@ -287,6 +368,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore
     }
+    cachedWorkspaceToken = null;
+    setHasWorkspaceToken(false);
     localStorage.removeItem(CURRENT_SESSION_KEY);
     localStorage.removeItem('amar_business_active_shop_id_v2');
     setUser(null);
@@ -313,6 +396,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         loading,
+        hasWorkspaceToken,
+        getWorkspaceToken,
+        connectGoogleWorkspace,
+        clearWorkspaceToken,
         login,
         register,
         loginWithGoogle,

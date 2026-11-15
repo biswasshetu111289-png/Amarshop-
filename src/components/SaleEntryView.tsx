@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useStore } from '../context/StoreContext';
 import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
-import { createSale, batchImportSales } from '../services/storeService';
+import { createMultiProductSale, batchImportSales } from '../services/storeService';
 import { formatCurrency, formatQty, getTodayString, toBengaliNumber, formatNumber, formatUnit } from '../utils/formatters';
 import { parseSaleCSV, ParsedSaleRow } from '../utils/csv';
 import { PaymentType, PAYMENT_METHODS, Sale } from '../types';
@@ -12,7 +12,6 @@ import confetti from 'canvas-confetti';
 import {
   ShoppingCart,
   BookOpen,
-  Contact,
   Search,
   Check,
   CheckCircle,
@@ -22,7 +21,8 @@ import {
   User,
   Calendar,
   X,
-  PlusCircle,
+  Plus,
+  Trash2,
   Package,
   Palette,
   ShieldAlert,
@@ -30,7 +30,20 @@ import {
   Banknote,
   Coins,
   Phone,
+  Receipt,
 } from 'lucide-react';
+
+interface CartItem {
+  tempId: string;
+  productId: string;
+  productName: string;
+  unit: string;
+  qty: number;
+  price: number;
+  total: number;
+  packagingPrice: number;
+  color: string;
+}
 
 export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   onSuccessNavigate,
@@ -52,9 +65,10 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   const [customerPhone, setCustomerPhone] = useState('');
   const [saleColor, setSaleColor] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [showAddressBookModal, setShowAddressBookModal] = useState(false);
   const [addressSearch, setAddressSearch] = useState("");
-  const [completedSaleForInvoice, setCompletedSaleForInvoice] = useState<Sale | null>(null);
+  const [completedSalesForInvoice, setCompletedSalesForInvoice] = useState<Sale[] | null>(null);
   const [addressNotice, setAddressNotice] = useState<string | null>(null);
 
   // Address book compiled from all past sales & customer dues
@@ -245,18 +259,25 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
     }
   }, [selectedProductId, currentProduct]);
 
-  // Live total calculation
-  const totalAmount = (parseFloat(qty) || 0) * (parseFloat(price) || 0);
+  // Live totals including any multi-product cart items + currently selected draft item
+  const currentDraftQty = parseFloat(qty) || 0;
+  const currentDraftPrice = parseFloat(price) || 0;
+  const currentDraftTotal =
+    selectedProductId && currentProduct && currentDraftQty > 0
+      ? currentDraftQty * currentDraftPrice
+      : 0;
+  const cartSubtotal = cartItems.reduce((sum, item) => sum + item.total, 0);
+  const totalAmount = cartSubtotal + currentDraftTotal;
 
-  const handleSubmitSale = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !targetId) return;
+  const getUsedQtyInCart = (productId: string) =>
+    cartItems
+      .filter((item) => item.productId === productId)
+      .reduce((sum, item) => sum + item.qty, 0);
 
-// Allowed for owners, managers, and store staff (viewers)
-
+  const handleAddToCart = () => {
     if (!selectedProductId || !currentProduct) {
       showToast(
-        language === 'bn' ? 'অনুগ্রহ করে একটি প্রোডাক্ট সিলেক্ট করুন' : 'Please select a product',
+        language === 'bn' ? 'কার্টে যোগ করতে আগে একটি প্রোডাক্ট সিলেক্ট করুন' : 'Select a product first',
         'warning'
       );
       return;
@@ -270,12 +291,13 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
       return;
     }
 
-    // Edge case: Selling more than available stock
-    if (saleQty > currentProduct.qty) {
+    const alreadyInCart = getUsedQtyInCart(currentProduct.id);
+    const remainingAvailable = currentProduct.qty - alreadyInCart;
+    if (saleQty > remainingAvailable) {
       showToast(
         language === 'bn'
-          ? `পর্যাপ্ত স্টক নেই! বর্তমান স্টক মাত্র ${formatQty(currentProduct.qty, currentProduct.unit, language)}`
-          : `Insufficient stock! Current stock is only ${formatQty(currentProduct.qty, currentProduct.unit, language)}`,
+          ? `পর্যাপ্ত স্টক নেই! বাকি স্টক মাত্র ${formatQty(Math.max(0, remainingAvailable), currentProduct.unit, language)}`
+          : `Insufficient stock! Remaining stock is ${formatQty(Math.max(0, remainingAvailable), currentProduct.unit, language)}`,
         'error'
       );
       return;
@@ -288,6 +310,118 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
       );
       return;
     }
+
+    const chosenColor = saleColor.trim() || currentProduct.color || '';
+    const lineTotal = saleQty * salePrice;
+
+    setCartItems((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) =>
+          item.productId === currentProduct.id &&
+          item.price === salePrice &&
+          item.color === chosenColor
+      );
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        const updatedQty = next[existingIdx].qty + saleQty;
+        next[existingIdx] = {
+          ...next[existingIdx],
+          qty: updatedQty,
+          total: updatedQty * salePrice,
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          tempId: `cart_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          productId: currentProduct.id,
+          productName: currentProduct.name,
+          unit: currentProduct.unit,
+          qty: saleQty,
+          price: salePrice,
+          total: lineTotal,
+          packagingPrice: currentProduct.packagingPrice || 0,
+          color: chosenColor,
+        },
+      ];
+    });
+
+    showToast(
+      language === 'bn'
+        ? `"${currentProduct.name}" কার্টে যোগ হয়েছে — আরও পণ্য যোগ করুন অথবা বিক্রি নিশ্চিত করুন`
+        : `"${currentProduct.name}" added to cart`,
+      'success'
+    );
+
+    setSelectedProductId('');
+    setQty('1');
+    setPrice('');
+    setSaleColor('');
+  };
+
+  const handleRemoveFromCart = (tempId: string) => {
+    setCartItems((prev) => prev.filter((item) => item.tempId !== tempId));
+  };
+
+  const handleSubmitSale = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !targetId) return;
+
+    const itemsToSubmit: CartItem[] = [...cartItems];
+
+    // Include currently selected product if present
+    if (selectedProductId && currentProduct) {
+      const saleQty = parseFloat(qty);
+      const salePrice = parseFloat(price);
+
+      if (isNaN(saleQty) || saleQty <= 0) {
+        showToast(language === 'bn' ? 'সঠিক পরিমাণ দিন' : 'Enter a valid quantity', 'warning');
+        return;
+      }
+
+      const alreadyInCart = getUsedQtyInCart(currentProduct.id);
+      const remainingAvailable = currentProduct.qty - alreadyInCart;
+      if (saleQty > remainingAvailable) {
+        showToast(
+          language === 'bn'
+            ? `পর্যাপ্ত স্টক নেই! বাকি স্টক মাত্র ${formatQty(Math.max(0, remainingAvailable), currentProduct.unit, language)}`
+            : `Insufficient stock! Remaining stock is ${formatQty(Math.max(0, remainingAvailable), currentProduct.unit, language)}`,
+          'error'
+        );
+        return;
+      }
+
+      if (isNaN(salePrice) || salePrice < 0) {
+        showToast(
+          language === 'bn' ? 'সঠিক বিক্রয় মূল্য দিন' : 'Enter a valid selling price',
+          'warning'
+        );
+        return;
+      }
+
+      itemsToSubmit.push({
+        tempId: 'current',
+        productId: currentProduct.id,
+        productName: currentProduct.name,
+        unit: currentProduct.unit,
+        qty: saleQty,
+        price: salePrice,
+        total: saleQty * salePrice,
+        packagingPrice: currentProduct.packagingPrice || 0,
+        color: saleColor.trim() || currentProduct.color || '',
+      });
+    }
+
+    if (itemsToSubmit.length === 0) {
+      showToast(
+        language === 'bn' ? 'অনুগ্রহ করে অন্তত একটি প্রোডাক্ট সিলেক্ট করুন' : 'Please select at least one product',
+        'warning'
+      );
+      return;
+    }
+
+    const grandTotal = itemsToSubmit.reduce((sum, item) => sum + item.total, 0);
 
     if (payment === 'বাকি' && !customer.trim()) {
       showToast(
@@ -308,7 +442,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         );
         return;
       }
-      if (parsedPaid >= totalAmount) {
+      if (parsedPaid >= grandTotal) {
         showToast(
           language === 'bn'
             ? 'পরিশোধিত টাকা মোট বিক্রির সমান বা বেশি হলে "নগদ" নির্বাচন করুন'
@@ -332,50 +466,55 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
     try {
       const finalPaidAmount =
         payment === 'নগদ'
-          ? totalAmount
+          ? grandTotal
           : payment === 'বাকি'
           ? 0
           : parseFloat(paidAmount) || 0;
-      const finalDueAmount = Math.max(0, totalAmount - finalPaidAmount);
 
-      const newSaleId = await createSale(targetId, {
-        productId: currentProduct.id,
-        productName: currentProduct.name,
-        qty: saleQty,
-        unit: currentProduct.unit,
-        price: salePrice,
-        total: totalAmount,
-        date,
-        payment,
-        paymentMethod: paymentMethod || 'নগদ',
-        paidAmount: finalPaidAmount,
-        dueAmount: finalDueAmount,
-        customer: customer.trim(),
-        customerPhone: customerPhone.trim(),
-        packagingPrice: currentProduct.packagingPrice || 0,
-        color: saleColor.trim() || currentProduct.color || '',
+      // Distribute paid/due sequentially across items so total paid + due match invoice exact sum
+      let remainingCash = finalPaidAmount;
+      const preparedSalesPayload = itemsToSubmit.map((item) => {
+        let itemPaid = 0;
+        let itemDue = item.total;
+        let itemPaymentStatus: PaymentType = payment;
+
+        if (payment === 'নগদ') {
+          itemPaid = item.total;
+          itemDue = 0;
+          itemPaymentStatus = 'নগদ';
+        } else if (payment === 'বাকি') {
+          itemPaid = 0;
+          itemDue = item.total;
+          itemPaymentStatus = 'বাকি';
+        } else {
+          itemPaid = Math.min(item.total, Math.max(0, remainingCash));
+          remainingCash = Math.max(0, remainingCash - itemPaid);
+          itemDue = Math.max(0, item.total - itemPaid);
+          itemPaymentStatus =
+            itemDue <= 0 ? 'নগদ' : itemPaid > 0 ? 'আংশিক' : 'বাকি';
+        }
+
+        return {
+          productId: item.productId,
+          productName: item.productName,
+          qty: item.qty,
+          unit: item.unit,
+          price: item.price,
+          total: item.total,
+          date,
+          payment: itemPaymentStatus,
+          paymentMethod: paymentMethod || 'নগদ',
+          paidAmount: itemPaid,
+          dueAmount: itemDue,
+          customer: customer.trim(),
+          customerPhone: customerPhone.trim(),
+          packagingPrice: item.packagingPrice,
+          color: item.color,
+        };
       });
 
-      const newSaleRecord: Sale = {
-        id: newSaleId || ("sale_" + Date.now()),
-        productId: currentProduct.id,
-        productName: currentProduct.name,
-        qty: saleQty,
-        unit: currentProduct.unit,
-        price: salePrice,
-        total: totalAmount,
-        date,
-        payment,
-        paymentMethod: paymentMethod || 'নগদ',
-        paidAmount: finalPaidAmount,
-        dueAmount: finalDueAmount,
-        customer: customer.trim(),
-        customerPhone: customerPhone.trim(),
-        packagingPrice: currentProduct.packagingPrice || 0,
-        color: saleColor.trim() || currentProduct.color || '',
-      };
+      const createdSales = await createMultiProductSale(targetId, preparedSalesPayload);
 
-      // Joyful confetti for successful sale!
       confetti({
         particleCount: 60,
         spread: 60,
@@ -384,23 +523,25 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
 
       showToast(
         language === 'bn'
-          ? `৳ ${totalAmount.toLocaleString('en-US')} এর বিক্রি সফলভাবে সংরক্ষিত হয়েছে!`
-          : `Sale of ৳ ${totalAmount.toLocaleString('en-US')} saved successfully!`,
+          ? `${toBengaliNumber(createdSales.length)} টি পণ্যের ৳ ${grandTotal.toLocaleString('en-US')} বিক্রি সংরক্ষিত হয়েছে!`
+          : `Sale of ${createdSales.length} item(s) totaling ৳ ${grandTotal.toLocaleString('en-US')} saved!`,
         'success'
       );
 
-      // Reset form fields
+      // Reset form & cart
+      setCartItems([]);
       setSelectedProductId('');
       setQty('1');
       setPrice('');
+      setSaleColor('');
       setCustomer('');
       setCustomerPhone('');
       setPayment('নগদ');
       setPaymentMethod('নগদ');
       setPaidAmount('');
 
-      // Immediately launch the Invoice Modal with WhatsApp share!
-      setCompletedSaleForInvoice(newSaleRecord);
+      // Launch Money Receipt Modal with all items!
+      setCompletedSalesForInvoice(createdSales);
     } catch (err) {
       console.error(err);
       showToast(
@@ -503,19 +644,22 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
               <span className="text-rose-500">*</span>
             </label>
             <select
-              required
-              
+              required={cartItems.length === 0}
               value={selectedProductId}
               onChange={(e) => setSelectedProductId(e.target.value)}
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs md:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white disabled:opacity-60"
             >
               <option value="">
-                {language === 'bn' ? '-- প্রোডাক্ট বেছে নিন --' : '-- Select Product --'}
+                {language === 'bn'
+                  ? cartItems.length > 0
+                    ? '-- আরও পণ্য যোগ করতে চাইলে বেছে নিন --'
+                    : '-- প্রোডাক্ট বেছে নিন --'
+                  : '-- Select Product --'}
               </option>
               {availableProducts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} {p.color ? `(${p.color})` : ''} ({language === 'bn' ? 'মজুদ: ' : 'Stock: '}
-                  {formatQty(p.qty, p.unit, language)}) — {formatCurrency(p.sellPrice, language)}
+                  {formatQty(Math.max(0, p.qty - getUsedQtyInCart(p.id)), p.unit, language)}) — {formatCurrency(p.sellPrice, language)}
                 </option>
               ))}
             </select>
@@ -528,7 +672,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                     {language === 'bn' ? 'বর্তমান স্টক: ' : 'Current Stock: '}
                   </span>
                   <span className="font-bold text-blue-700">
-                    {formatQty(currentProduct.qty, currentProduct.unit, language)}
+                    {formatQty(Math.max(0, currentProduct.qty - getUsedQtyInCart(currentProduct.id)), currentProduct.unit, language)}
                   </span>
                 </div>
                 {/* Selectable Color Variant Chips if product has colors */}
@@ -600,14 +744,13 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                 {language === 'bn'
                   ? `পরিমাণ (${currentProduct ? currentProduct.unit : 'একক'})`
                   : `Quantity (${formatUnit(currentProduct?.unit, language) || 'unit'})`}{' '}
-                <span className="text-rose-500">*</span>
+                {cartItems.length === 0 && <span className="text-rose-500">*</span>}
               </label>
               <input
                 type="number"
                 step="any"
-                required
+                required={cartItems.length === 0}
                 min="0.01"
-                
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
                 placeholder="1"
@@ -618,14 +761,13 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 {language === 'bn' ? 'বিক্রয় মূল্য (৳)' : 'Selling Price (৳)'}{' '}
-                <span className="text-rose-500">*</span>
+                {cartItems.length === 0 && <span className="text-rose-500">*</span>}
               </label>
               <input
                 type="number"
                 step="any"
-                required
+                required={cartItems.length === 0}
                 min="0"
-                
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder={language === 'bn' ? 'রেট দিন' : 'Enter price'}
@@ -633,6 +775,76 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
               />
             </div>
           </div>
+
+          {/* Multi-Product Add to Cart Trigger */}
+          {canManage && (
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={!selectedProductId}
+                className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4 text-indigo-600" />
+                <span>
+                  {language === 'bn'
+                    ? 'কার্টে যোগ করে আরও পণ্য নিন (একই মানি রিসিট)'
+                    : 'Add to Multi-Item Cart (Same Receipt)'}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* Multi-Product Cart Preview List */}
+          {cartItems.length > 0 && (
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
+                  <Receipt className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>
+                    {language === 'bn'
+                      ? `রিসিটে যুক্ত পণ্যসমূহ (${toBengaliNumber(cartItems.length)} টি)`
+                      : `Cart Items (${cartItems.length})`}
+                  </span>
+                </span>
+                <span className="text-xs font-black text-indigo-800">
+                  {formatCurrency(cartSubtotal, language)}
+                </span>
+              </div>
+
+              <div className="divide-y divide-indigo-100 bg-white rounded-xl border border-indigo-100 overflow-hidden">
+                {cartItems.map((item, idx) => (
+                  <div
+                    key={item.tempId}
+                    className="px-3 py-2 flex items-center justify-between gap-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 truncate">
+                        {language === 'bn' ? toBengaliNumber(idx + 1) : idx + 1}. {item.productName}
+                        {item.color ? ` (${item.color})` : ''}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {formatQty(item.qty, item.unit, language)} × {formatCurrency(item.price, language)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-extrabold text-slate-900">
+                        {formatCurrency(item.total, language)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFromCart(item.tempId)}
+                        className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                        title={language === 'bn' ? 'বাদ দিন' : 'Remove'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Date & Payment Mode */}
           <div className="space-y-3">
@@ -918,6 +1130,8 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             <div>
               <span className="text-[11px] text-blue-200 block">
                 {language === 'bn' ? 'মোট বিক্রয় মূল্য' : 'Total Sale Amount'}
+                {cartItems.length > 0 &&
+                  ` (${toBengaliNumber(cartItems.length + (selectedProductId && currentDraftQty > 0 ? 1 : 0))} টি আইটেম)`}
               </span>
               <span className="text-xl font-black tracking-tight block mt-0.5">
                 {formatCurrency(totalAmount, language)}
@@ -925,13 +1139,23 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             </div>
 
             <div className="text-right text-[11px] text-slate-300">
-              <div>
-                {language === 'bn' ? 'পরিমাণ: ' : 'Qty: '}
-                {qty || 0} {formatUnit(currentProduct?.unit, language)}
-              </div>
-              <div>
-                {language === 'bn' ? 'দর: ' : 'Rate: '}@{price || 0} ৳
-              </div>
+              {selectedProductId && currentProduct ? (
+                <>
+                  <div>
+                    {language === 'bn' ? 'চলতি আইটেম: ' : 'Current: '}
+                    {qty || 0} {formatUnit(currentProduct?.unit, language)}
+                  </div>
+                  <div>
+                    {language === 'bn' ? 'দর: ' : 'Rate: '}@{price || 0} ৳
+                  </div>
+                </>
+              ) : (
+                <div>
+                  {language === 'bn'
+                    ? `${toBengaliNumber(cartItems.length)} টি পণ্য কার্টে`
+                    : `${cartItems.length} item(s) in cart`}
+                </div>
+              )}
             </div>
           </div>
 
@@ -939,7 +1163,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           {canManage ? (
             <button
               type="submit"
-              disabled={submitting || availableProducts.length === 0}
+              disabled={submitting || (availableProducts.length === 0 && cartItems.length === 0)}
               className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {submitting ? (
@@ -947,7 +1171,15 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
               ) : (
                 <>
                   <ShoppingCart className="w-4 h-4" />
-                  <span>{language === 'bn' ? 'বিক্রয় নিশ্চিত করুন' : 'Complete Sale'}</span>
+                  <span>
+                    {cartItems.length > 0
+                      ? language === 'bn'
+                        ? 'বিক্রয় নিশ্চিত ও মানি রিসিট তৈরি করুন'
+                        : 'Complete Multi-Item Sale & Receipt'
+                      : language === 'bn'
+                      ? 'বিক্রয় নিশ্চিত করুন'
+                      : 'Complete Sale'}
+                  </span>
                 </>
               )}
             </button>
@@ -1081,6 +1313,161 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Store Customer Address Book Modal */}
+      {showAddressBookModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-emerald-400" />
+                <span>{language === 'bn' ? 'দোকানের কাস্টমার তালিকা' : 'Store Customers'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddressBookModal(false)}
+                className="p-1 text-slate-300 hover:text-white rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 border-b border-slate-100">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={addressSearch}
+                  onChange={(e) => setAddressSearch(e.target.value)}
+                  placeholder={language === 'bn' ? 'নাম বা ফোন নম্বর খুঁজুন...' : 'Search customer...'}
+                  className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            <div className="p-2 overflow-y-auto flex-1 divide-y divide-slate-100">
+              {customerAddressBook
+                .filter(
+                  (c) =>
+                    c.name.toLowerCase().includes(addressSearch.toLowerCase()) ||
+                    c.phone.includes(addressSearch)
+                )
+                .map((c) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => selectCustomerFromBook(c)}
+                    className="w-full p-2.5 text-left hover:bg-slate-50 rounded-xl flex items-center justify-between transition"
+                  >
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">{c.name}</p>
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        {c.phone || (language === 'bn' ? 'ফোন নম্বর নেই' : 'No phone')}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                      {formatNumber(c.count, language)} {language === 'bn' ? 'বার' : 'orders'}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phone Contacts Fallback Modal */}
+      {showPhoneContactModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-4 py-3 bg-emerald-800 text-white flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <Phone className="w-4 h-4 text-emerald-200" />
+                <span>{language === 'bn' ? 'ফোনের সেভ করা কন্টাক্ট' : 'Saved Phone Contacts'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPhoneContactModal(false)}
+                className="p-1 text-emerald-100 hover:text-white rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 border-b border-slate-100 space-y-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={phoneContactSearch}
+                  onChange={(e) => setPhoneContactSearch(e.target.value)}
+                  placeholder={language === 'bn' ? 'নাম বা নম্বর খুঁজুন...' : 'Search contact...'}
+                  className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none"
+                />
+              </div>
+              <input
+                ref={phoneVcfInputRef}
+                type="file"
+                accept=".vcf,text/vcard"
+                onChange={handleImportVCF}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => phoneVcfInputRef.current?.click()}
+                className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>{language === 'bn' ? 'ফোন থেকে .vcf কন্টাক্ট ফাইল ইমপোর্ট করুন' : 'Import .vcf Contacts File'}</span>
+              </button>
+            </div>
+            <div className="p-2 overflow-y-auto flex-1 divide-y divide-slate-100">
+              {phoneContacts.length === 0 ? (
+                <p className="text-center text-xs text-slate-500 py-6">
+                  {language === 'bn'
+                    ? 'কোনো কন্টাক্ট লোড করা নেই। আপনার ফোনের Contacts অ্যাপ থেকে .vcf ফাইল এক্সপোর্ট করে এখানে আপলোড করতে পারেন।'
+                    : 'No contacts saved yet. Import a .vcf file from your phone contacts.'}
+                </p>
+              ) : (
+                phoneContacts
+                  .filter(
+                    (c) =>
+                      c.name.toLowerCase().includes(phoneContactSearch.toLowerCase()) ||
+                      c.phone.includes(phoneContactSearch)
+                  )
+                  .map((c, idx) => (
+                    <button
+                      key={`${c.name}_${idx}`}
+                      type="button"
+                      onClick={() => {
+                        setCustomer(c.name);
+                        setCustomerPhone(c.phone);
+                        setShowPhoneContactModal(false);
+                        setAddressNotice(`✅ "${c.name}" (${c.phone}) সিলেক্ট হয়েছে!`);
+                      }}
+                      className="w-full p-2.5 text-left hover:bg-emerald-50/70 rounded-xl flex items-center justify-between transition"
+                    >
+                      <span className="text-xs font-bold text-slate-800">{c.name}</span>
+                      <span className="text-xs font-mono text-emerald-700">{c.phone}</span>
+                    </button>
+                  ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official Money Receipt Modal */}
+      {completedSalesForInvoice && completedSalesForInvoice.length > 0 && (
+        <InvoiceModal
+          sales={completedSalesForInvoice}
+          shopName={currentShop?.name}
+          shopPhone={currentShop?.phone}
+          shopAddress={currentShop?.address}
+          logoUrl={currentShop?.logoUrl}
+          onClose={() => setCompletedSalesForInvoice(null)}
+          onNextSale={() => {
+            setCompletedSalesForInvoice(null);
+            if (onSuccessNavigate) onSuccessNavigate();
+          }}
+        />
       )}
     </div>
   );

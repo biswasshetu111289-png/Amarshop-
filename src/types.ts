@@ -44,6 +44,9 @@ export interface Shop {
   logoUrl?: string;
   members: Record<string, ShopMember>;
   joinRequests?: Record<string, ShopJoinRequest>;
+  googleSheetId?: string;
+  googleSheetUrl?: string;
+  lastSheetSyncAt?: string;
 }
 
 export interface StoreBackupData {
@@ -143,6 +146,7 @@ export interface Sale {
   packagingPrice?: number;
   color?: string;
   notes?: string;
+  invoiceGroupId?: string; // একাধিক পণ্য একসাথে বিক্রি করলে একই মানি রিসিটে গ্রুপ করার জন্য
   collectionDate?: string; // বাকি আদায়ের তারিখ (YYYY-MM-DD)
   collectionNotes?: string; // বাকি আদায়ের সময় প্রদত্ত নোট বা ট্রানজেকশন আইডি
   createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;

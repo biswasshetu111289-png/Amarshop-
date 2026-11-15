@@ -89,7 +89,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   // Sale Modals State
   const [detailSale, setDetailSale] = useState<Sale | null>(null);
-  const [invoiceSale, setInvoiceSale] = useState<Sale | null>(null);
+  const [invoiceSales, setInvoiceSales] = useState<Sale[] | null>(null);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
 
   // Edit Sale Form State
@@ -1026,7 +1026,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           onClose={() => setDetailSale(null)}
           onOpenInvoice={(s) => {
             setDetailSale(null);
-            setInvoiceSale(s);
+            if (s.invoiceGroupId) {
+              const grouped = sales.filter((item) => item.invoiceGroupId === s.invoiceGroupId);
+              setInvoiceSales(grouped.length > 0 ? grouped : [s]);
+            } else {
+              setInvoiceSales([s]);
+            }
           }}
           onEdit={(s) => openEditModal(s)}
           onDelete={(s) => handleDeleteSale(s)}
@@ -1035,14 +1040,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       )}
 
       {/* Invoice Modal */}
-      {invoiceSale && (
+      {invoiceSales && invoiceSales.length > 0 && (
         <InvoiceModal
-          sale={invoiceSale}
+          sales={invoiceSales}
           shopName={currentShop?.name}
           shopPhone={currentShop?.phone}
           shopAddress={currentShop?.address}
           logoUrl={currentShop?.logoUrl}
-          onClose={() => setInvoiceSale(null)}
+          onClose={() => setInvoiceSales(null)}
         />
       )}
 
