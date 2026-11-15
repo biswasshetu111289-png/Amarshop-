@@ -362,7 +362,13 @@ export async function fetchUserShops(uid: string, email?: string): Promise<Shop[
     console.warn('Local shop check error:', e);
   }
 
-  return Array.from(shopsMap.values());
+  const list = Array.from(shopsMap.values());
+  list.sort((a, b) => {
+    if (a.id === 'shop_cqeemj_recovery' && b.id !== 'shop_cqeemj_recovery') return -1;
+    if (b.id === 'shop_cqeemj_recovery' && a.id !== 'shop_cqeemj_recovery') return 1;
+    return (a.createdAt || '').localeCompare(b.createdAt || '');
+  });
+  return list;
 }
 
 /**
