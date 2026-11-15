@@ -316,7 +316,7 @@ export function buildShopSpreadsheetTabs(shop: Shop, data: ShopFullData): TabPay
         s.payment || 'নগদ',
         paid,
         due,
-        s.paymentMethod || 'নগদ',
+        s.payment === 'বাকি' ? 'বাকি' : s.paymentMethod || 'নগদ',
         s.customer || '',
         s.customerPhone || '',
         s.color || '',

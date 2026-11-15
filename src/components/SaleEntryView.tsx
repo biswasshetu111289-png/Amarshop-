@@ -503,7 +503,12 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           total: item.total,
           date,
           payment: itemPaymentStatus,
-          paymentMethod: paymentMethod || 'নগদ',
+          paymentMethod:
+            itemPaymentStatus === 'বাকি'
+              ? 'বাকি'
+              : paymentMethod === 'বাকি'
+              ? 'নগদ'
+              : paymentMethod || 'নগদ',
           paidAmount: itemPaid,
           dueAmount: itemDue,
           customer: customer.trim(),
@@ -878,6 +883,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                     onClick={() => {
                       setPayment('নগদ');
                       setPaidAmount('');
+                      if (paymentMethod === 'বাকি') setPaymentMethod('নগদ');
                     }}
                     className={`py-2 px-1 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 ${
                       payment === 'নগদ'
@@ -894,6 +900,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                     
                     onClick={() => {
                       setPayment('আংশিক');
+                      if (paymentMethod === 'বাকি') setPaymentMethod('নগদ');
                       if (!paidAmount && totalAmount > 0) {
                         setPaidAmount(String(Math.round(totalAmount / 2)));
                       }
@@ -914,6 +921,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                     onClick={() => {
                       setPayment('বাকি');
                       setPaidAmount('');
+                      setPaymentMethod('বাকি');
                     }}
                     className={`py-2 px-1 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 ${
                       payment === 'বাকি'
@@ -935,35 +943,54 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                   <CreditCard className="w-3.5 h-3.5 text-indigo-500" />
                   <span>
                     {language === 'bn'
-                      ? 'পেমেন্টের ধরন (Type of Payment) - ঐচ্ছিক'
-                      : 'Type of Payment (Method) - Optional'}
+                      ? 'পেমেন্টের মাধ্যম (Type of Payment)'
+                      : 'Type of Payment (Method)'}
                   </span>
                 </label>
                 <span className="text-[10px] text-slate-400">
-                  {language === 'bn' ? 'পদ্ধতি বেছে নিন' : 'Select method'}
+                  {payment === 'বাকি'
+                    ? language === 'bn'
+                      ? 'বাকি হিসেবে নির্ধারিত'
+                      : 'Set to Due'
+                    : language === 'bn'
+                    ? 'পদ্ধতি বেছে নিন'
+                    : 'Select method'}
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
-                {PAYMENT_METHODS.map((method) => {
-                  const isSelected = paymentMethod === method.id;
-                  return (
-                    <button
-                      key={method.id}
-                      type="button"
-                      
-                      onClick={() => setPaymentMethod(method.id)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
-                        isSelected
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {language === 'en' ? method.nameEn : method.nameBn}
-                    </button>
-                  );
-                })}
-              </div>
+              {payment === 'বাকি' ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-600 text-white border border-amber-600 shadow-xs">
+                    {language === 'en' ? 'Due / Credit' : 'বাকি (Credit)'}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    {language === 'bn'
+                      ? 'বাকিতে বিক্রির পেমেন্ট মাধ্যম বাকি থাকবে'
+                      : 'Credit sales use Due as payment method'}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {PAYMENT_METHODS.map((method) => {
+                    const isSelected = paymentMethod === method.id;
+                    return (
+                      <button
+                        key={method.id}
+                        type="button"
+                        
+                        onClick={() => setPaymentMethod(method.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {language === 'en' ? method.nameEn : method.nameBn}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Partial Payment Calculation Block */}

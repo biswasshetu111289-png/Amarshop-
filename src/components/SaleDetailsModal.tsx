@@ -110,7 +110,7 @@ export const SaleDetailsModal: React.FC<SaleDetailsModalProps> = ({
                 {formatPaymentType(sale.payment, language)}
               </span>
               <span className="text-[11px] text-slate-500 block mt-1">
-                মেথড: {formatPaymentMethod(sale.paymentMethod || 'নগদ', language)}
+                মেথড: {formatPaymentMethod(sale.payment === 'বাকি' ? 'বাকি' : sale.paymentMethod || 'নগদ', language)}
               </span>
             </div>
           </div>

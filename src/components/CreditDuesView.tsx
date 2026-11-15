@@ -479,9 +479,12 @@ export const CreditDuesView: React.FC<CreditDuesViewProps> = ({ initialSubTab = 
                                 <span>
                                   {formatQty(sale.qty, sale.unit, language)} @ {formatCurrency(sale.price, language)}
                                 </span>
-                                {sale.paymentMethod && (
+                                {(sale.payment === 'বাকি' || sale.paymentMethod) && (
                                   <span className="bg-slate-100 text-slate-600 px-1 rounded font-medium">
-                                    {formatPaymentMethod(sale.paymentMethod, language)}
+                                    {formatPaymentMethod(
+                                      sale.payment === 'বাকি' ? 'বাকি' : sale.paymentMethod,
+                                      language
+                                    )}
                                   </span>
                                 )}
                               </div>

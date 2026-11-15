@@ -164,8 +164,15 @@ export const SalesHistoryView: React.FC = () => {
     setEditUnit(sale.unit || 'পিস');
     setEditPrice(String(sale.price));
     setEditDate(sale.date || getTodayString());
-    setEditPayment(sale.payment || 'নগদ');
-    setEditPaymentMethod(sale.paymentMethod || 'নগদ');
+    const initialPayment = sale.payment || 'নগদ';
+    setEditPayment(initialPayment);
+    setEditPaymentMethod(
+      initialPayment === 'বাকি'
+        ? 'বাকি'
+        : sale.paymentMethod && sale.paymentMethod !== 'বাকি'
+        ? sale.paymentMethod
+        : 'নগদ'
+    );
     setEditPaidAmount(
       sale.paidAmount !== undefined
         ? String(sale.paidAmount)
@@ -242,7 +249,12 @@ export const SalesHistoryView: React.FC = () => {
           total: totalAmount,
           date: editDate,
           payment: editPayment,
-          paymentMethod: editPaymentMethod || 'নগদ',
+          paymentMethod:
+            editPayment === 'বাকি'
+              ? 'বাকি'
+              : editPaymentMethod === 'বাকি'
+              ? 'নগদ'
+              : editPaymentMethod || 'নগদ',
           paidAmount: finalPaid,
           dueAmount: finalDue,
           customer: editCustomer.trim(),
@@ -669,9 +681,12 @@ export const SalesHistoryView: React.FC = () => {
                         >
                           {formatPaymentType(sale.payment, language)}
                         </span>
-                        {sale.paymentMethod && (
+                        {(sale.payment === 'বাকি' || sale.paymentMethod) && (
                           <span className="text-[10px] text-slate-500 font-medium">
-                            {formatPaymentMethod(sale.paymentMethod, language)}
+                            {formatPaymentMethod(
+                              sale.payment === 'বাকি' ? 'বাকি' : sale.paymentMethod,
+                              language
+                            )}
                           </span>
                         )}
                         {sale.payment === 'আংশিক' && sale.paidAmount !== undefined && (
@@ -851,6 +866,7 @@ export const SalesHistoryView: React.FC = () => {
                         onClick={() => {
                           setEditPayment('নগদ');
                           setEditPaidAmount(String(editTotalAmount));
+                          if (editPaymentMethod === 'বাকি') setEditPaymentMethod('নগদ');
                         }}
                         className={`py-1.5 px-1 rounded-xl text-xs font-bold transition ${
                           editPayment === 'নগদ'
@@ -864,6 +880,7 @@ export const SalesHistoryView: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setEditPayment('আংশিক');
+                          if (editPaymentMethod === 'বাকি') setEditPaymentMethod('নগদ');
                           if (!editPaidAmount || editPaidAmount === '0') {
                             setEditPaidAmount(String(Math.round(editTotalAmount / 2)));
                           }
@@ -881,6 +898,7 @@ export const SalesHistoryView: React.FC = () => {
                         onClick={() => {
                           setEditPayment('বাকি');
                           setEditPaidAmount('0');
+                          setEditPaymentMethod('বাকি');
                         }}
                         className={`py-1.5 px-1 rounded-xl text-xs font-bold transition ${
                           editPayment === 'বাকি'
@@ -911,28 +929,41 @@ export const SalesHistoryView: React.FC = () => {
                 <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
                   <label className="block text-[11px] font-bold text-slate-700">
                     {language === 'bn'
-                      ? 'পেমেন্টের ধরন (Type of Payment) - ঐচ্ছিক'
-                      : 'Type of Payment (Method) - Optional'}
+                      ? 'পেমেন্টের মাধ্যম (Type of Payment)'
+                      : 'Type of Payment (Method)'}
                   </label>
-                  <div className="flex flex-wrap gap-1">
-                    {PAYMENT_METHODS.map((method) => {
-                      const isSelected = editPaymentMethod === method.id;
-                      return (
-                        <button
-                          key={method.id}
-                          type="button"
-                          onClick={() => setEditPaymentMethod(method.id)}
-                          className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition border ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {language === 'en' ? method.nameEn : method.nameBn}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {editPayment === 'বাকি' ? (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-amber-600 text-white border border-amber-600 shadow-xs">
+                        {language === 'en' ? 'Due / Credit' : 'বাকি (Credit)'}
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        {language === 'bn'
+                          ? 'বাকি বিক্রির মাধ্যম বাকি থাকবে'
+                          : 'Due sale payment method is Due'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {PAYMENT_METHODS.map((method) => {
+                        const isSelected = editPaymentMethod === method.id;
+                        return (
+                          <button
+                            key={method.id}
+                            type="button"
+                            onClick={() => setEditPaymentMethod(method.id)}
+                            className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition border ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {language === 'en' ? method.nameEn : method.nameBn}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Partial Payment Amount Input */}

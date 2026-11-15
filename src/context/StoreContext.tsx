@@ -580,6 +580,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const items: Sale[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
+          const resolvedPayment =
+            data.payment === 'বাকি' ? 'বাকি' : data.payment === 'আংশিক' ? 'আংশিক' : 'নগদ';
           items.push({
             id: docSnap.id,
             productId: data.productId || '',
@@ -589,8 +591,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             price: Number(data.price) || 0,
             total: Number(data.total) || 0,
             date: data.date || '',
-            payment: data.payment === 'বাকি' ? 'বাকি' : data.payment === 'আংশিক' ? 'আংশিক' : 'নগদ',
-            paymentMethod: data.paymentMethod || 'নগদ',
+            payment: resolvedPayment,
+            paymentMethod:
+              resolvedPayment === 'বাকি' ? 'বাকি' : data.paymentMethod || 'নগদ',
             paidAmount: Number(data.paidAmount ?? (data.payment === 'বাকি' ? 0 : data.total)),
             dueAmount: Number(data.dueAmount ?? (data.payment === 'বাকি' ? data.total : 0)),
             customer: data.customer || '',

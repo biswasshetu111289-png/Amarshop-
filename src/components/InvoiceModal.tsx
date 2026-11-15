@@ -93,7 +93,11 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   );
 
   const uniqueMethods = Array.from(
-    new Set(items.map((s) => s.paymentMethod || 'নগদ').filter(Boolean))
+    new Set(
+      items
+        .map((s) => (s.payment === 'বাকি' ? 'বাকি' : s.paymentMethod || 'নগদ'))
+        .filter(Boolean)
+    )
   );
   const paymentMethodLabel = uniqueMethods
     .map((m) => formatPaymentMethod(m, language))

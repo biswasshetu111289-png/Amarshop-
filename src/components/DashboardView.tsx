@@ -173,8 +173,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     setEditQty(String(sale.qty));
     setEditPrice(String(sale.price));
     setEditDate(sale.date || getTodayString());
-    setEditPayment(sale.payment || 'নগদ');
-    setEditPaymentMethod(sale.paymentMethod || 'নগদ');
+    const initialPayment = sale.payment || 'নগদ';
+    setEditPayment(initialPayment);
+    setEditPaymentMethod(
+      initialPayment === 'বাকি'
+        ? 'বাকি'
+        : sale.paymentMethod && sale.paymentMethod !== 'বাকি'
+        ? sale.paymentMethod
+        : 'নগদ'
+    );
     setEditPaidAmount(
       sale.paidAmount !== undefined
         ? String(sale.paidAmount)
@@ -233,7 +240,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           total: totalAmount,
           date: editDate,
           payment: editPayment,
-          paymentMethod: editPaymentMethod || 'নগদ',
+          paymentMethod:
+            editPayment === 'বাকি'
+              ? 'বাকি'
+              : editPaymentMethod === 'বাকি'
+              ? 'নগদ'
+              : editPaymentMethod || 'নগদ',
           paidAmount: finalPaid,
           dueAmount: finalDue,
           customer: editCustomer.trim(),
@@ -1123,7 +1135,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     <button
                       key={p}
                       type="button"
-                      onClick={() => setEditPayment(p)}
+                      onClick={() => {
+                        setEditPayment(p);
+                        if (p === 'বাকি') {
+                          setEditPaymentMethod('বাকি');
+                        } else if (editPaymentMethod === 'বাকি') {
+                          setEditPaymentMethod('নগদ');
+                        }
+                      }}
                       className={`py-2 text-xs font-bold rounded-xl border transition ${
                         editPayment === p
                           ? p === 'নগদ'

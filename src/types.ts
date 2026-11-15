@@ -104,6 +104,7 @@ export type PaymentType = 'নগদ' | 'বাকি' | 'আংশিক';
 
 export type PaymentMethod =
   | 'নগদ'
+  | 'বাকি'
   | 'বিকাশ'
   | 'নগদ পে'
   | 'রকেট'
@@ -111,6 +112,8 @@ export type PaymentMethod =
   | 'ব্যাংক'
   | 'অন্যান্য'
   | 'Cash'
+  | 'Due'
+  | 'Credit'
   | 'bKash'
   | 'Nagad'
   | 'Rocket'

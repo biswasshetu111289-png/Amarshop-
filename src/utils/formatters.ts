@@ -148,6 +148,7 @@ export function formatPaymentMethod(method?: string, lang: 'bn' | 'en' = 'bn'): 
   if (!method) return '';
   const map: Record<string, { bn: string; en: string }> = {
     'নগদ': { bn: 'নগদ', en: 'Cash' },
+    'বাকি': { bn: 'বাকি', en: 'Due' },
     'বিকাশ': { bn: 'বিকাশ', en: 'bKash' },
     'নগদ পে': { bn: 'নগদ পে', en: 'Nagad' },
     'রকেট': { bn: 'রকেট', en: 'Rocket' },
@@ -155,6 +156,8 @@ export function formatPaymentMethod(method?: string, lang: 'bn' | 'en' = 'bn'): 
     'ব্যাংক': { bn: 'ব্যাংক', en: 'Bank Transfer' },
     'অন্যান্য': { bn: 'অন্যান্য', en: 'Other' },
     'Cash': { bn: 'নগদ', en: 'Cash' },
+    'Due': { bn: 'বাকি', en: 'Due' },
+    'Credit': { bn: 'বাকি', en: 'Credit' },
     'bKash': { bn: 'বিকাশ', en: 'bKash' },
     'Nagad': { bn: 'নগদ পে', en: 'Nagad' },
     'Rocket': { bn: 'রকেট', en: 'Rocket' },
