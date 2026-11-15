@@ -362,10 +362,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (target) {
         const isShopAdmin =
           target.ownerId === user.uid ||
+          isEmailMatch(target.ownerEmail, user.email) ||
           target.members?.[user.uid]?.role === 'admin' ||
           (user.email &&
             Object.values(target.members || {}).some(
-              (m) => m.email?.toLowerCase() === user.email?.toLowerCase() && m.role === 'admin'
+              (m) => isEmailMatch(m.email, user.email) && m.role === 'admin'
             ));
 
         if (!isShopAdmin) {

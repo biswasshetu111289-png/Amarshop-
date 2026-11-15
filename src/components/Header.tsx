@@ -14,6 +14,7 @@ import {
   inviteMemberDirect,
   updateShopDetails,
   deleteShop,
+  isEmailMatch,
 } from '../services/storeService';
 import { getDocs } from 'firebase/firestore';
 import { ShopRole, Shop, StoreBackupData, AutoBackupFrequency, AutoBackupSnapshot, Product, Sale } from '../types';
@@ -856,8 +857,17 @@ export const Header: React.FC = () => {
             <div className="space-y-2 overflow-y-auto pr-1 flex-1">
               {shops.map((s) => {
                 const isSelected = currentShop?.id === s.id;
-                const isOwner = s.ownerId === user?.uid;
-                const memberRole = isOwner ? 'admin' : (s.members?.[user?.uid || '']?.role || 'viewer');
+                const isOwner =
+                  s.ownerId === user?.uid ||
+                  isEmailMatch(s.ownerEmail, user?.email);
+                const matchedMemberRole = user?.email
+                  ? Object.values(s.members || {}).find((m) =>
+                      isEmailMatch(m.email, user.email)
+                    )?.role
+                  : undefined;
+                const memberRole: ShopRole = isOwner
+                  ? 'admin'
+                  : s.members?.[user?.uid || '']?.role || matchedMemberRole || 'viewer';
 
                 return (
                   <div
@@ -1315,8 +1325,12 @@ export const Header: React.FC = () => {
 
                 <div className="space-y-2">
                   {Object.entries(currentShop.members || {}).map(([mUid, member]) => {
-                    const isOwner = currentShop.ownerId === mUid;
-                    const isSelf = user?.uid === mUid;
+                    const isOwner =
+                      currentShop.ownerId === mUid ||
+                      isEmailMatch(member.email, currentShop.ownerEmail);
+                    const isSelf =
+                      user?.uid === mUid ||
+                      isEmailMatch(member.email, user?.email);
 
                     return (
                       <div
