@@ -44,31 +44,49 @@ const CATEGORY_RULES: CategoryRule[] = [
   {
     category: 'Wallet',
     keywords: [
-      'wallet', 'wallets', 'মানিব্যাগ', 'ওয়ালেট', 'ওয়ালেট', 'মানিব্যাগ-',
-      'purse', 'purses', 'coin purse', 'card holder', 'cardholder', 'money clip'
+      'wallet', 'wallets', 'walet', 'wallett', 'মানিব্যাগ', 'মানি ব্যাগ',
+      'ওয়ালেট', 'ওয়ালেট', 'ওয়াল্লেট', 'মেস ওয়ালেট', 'মেস ওয়ালেট',
+      'মেন্স ওয়ালেট', 'মেনস ওয়ালেট', 'জেন্টস ওয়ালেট', 'লেডিস ওয়ালেট',
+      'পকেট ওয়ালেট', 'লেদার ওয়ালেট', 'ক্লাচ ওয়ালেট', 'mens wallet', 'men wallet',
+      'gents wallet', 'ladies wallet', 'leather wallet', 'long wallet',
+      'short wallet', 'bifold', 'trifold', 'purse', 'purses', 'পার্স',
+      'coin purse', 'card holder', 'cardholder', 'কার্ড হোল্ডার', 'money clip',
+      'money bag'
     ],
   },
   {
     category: 'Watch',
     keywords: [
-      'watch', 'watches', 'ঘড়ি', 'ঘড়ি', 'হাতঘড়ি', 'হাতঘড়ি', 'স্মার্টওয়াচ',
-      'স্মার্টওয়াচ', 'smartwatch', 'smart watch', 'wrist watch', 'wristwatch',
+      'watch', 'watches', 'ওয়াচ', 'ওয়াচ', 'ঘড়ি', 'ঘড়ি', 'হাতঘড়ি', 'হাতঘড়ি',
+      'স্মার্টওয়াচ', 'স্মার্টওয়াচ', 'স্মার্ট ওয়াচ', 'smartwatch', 'smart watch',
+      'wrist watch', 'wristwatch', 'লেডিস ওয়াচ', 'লেডিস ঘড়ি', 'ladies watch',
+      'জেন্টস ওয়াচ', 'জেন্টস ঘড়ি', 'gents watch', 'মেনস ওয়াচ', 'মেন্স ওয়াচ',
+      'mens watch', 'men watch', 'চেইন ঘড়ি', 'বেল্ট ঘড়ি', 'দেয়াল ঘড়ি',
       'rolex', 'casio', 'titan', 'tissot', 'fossil', 'curren', 'naviforce',
+      'skmei', 'olevs', 'poedagar', 'lige', 'timex', 'seiko', 'citizen',
       'wall clock', 'clock', 'টাইটান', 'ক্যাসিও'
     ],
   },
   {
     category: 'Belt',
     keywords: [
-      'belt', 'belts', 'বেল্ট', 'লেদার বেল্ট', 'leather belt', 'কোমর বেল্ট'
+      'belt', 'belts', 'বেল্ট', 'লেদার বেল্ট', 'leather belt', 'কোমর বেল্ট',
+      'মেনস বেল্ট', 'mens belt', 'অটো বেল্ট', 'auto belt'
     ],
   },
   {
     category: 'Bag',
     keywords: [
-      'bag', 'bags', 'ব্যাগ', 'backpack', 'backpacks', 'স্কুল ব্যাগ', 'handbag',
-      'handbags', 'shoulder bag', 'travel bag', 'tote bag', 'side bag', 'ল্যাপটপ ব্যাগ',
-      'laptop bag', 'school bag', 'লেডিস ব্যাগ', 'luggage', 'suitcase'
+      'bag', 'bags', 'ব্যাগ', 'ব্যাগস', 'লেডিস ব্যাগ', 'ladies bag',
+      'জেন্টস ব্যাগ', 'gents bag', 'মেনস ব্যাগ', 'মেন্স ব্যাগ', 'মেস ব্যাগ',
+      'mens bag', 'men bag', 'backpack', 'backpacks', 'ব্যাকপ্যাক',
+      'স্কুল ব্যাগ', 'school bag', 'handbag', 'handbags', 'হ্যান্ডব্যাগ',
+      'হ্যান্ড ব্যাগ', 'shoulder bag', 'শোল্ডার ব্যাগ', 'travel bag', 'ট্রাভেল ব্যাগ',
+      'tote bag', 'টোট ব্যাগ', 'side bag', 'সাইড ব্যাগ', 'sling bag', 'স্লিং ব্যাগ',
+      'crossbody', 'ক্রসবডি', 'messenger bag', 'মেসেঞ্জার ব্যাগ', 'ভ্যানিটি ব্যাগ',
+      'vanity bag', 'অফিস ব্যাগ', 'office bag', 'ল্যাপটপ ব্যাগ', 'laptop bag',
+      'ক্লাচ ব্যাগ', 'clutch bag', 'ট্রলি ব্যাগ', 'trolley bag', 'luggage',
+      'suitcase', 'লাগেজ'
     ],
   },
   {
@@ -271,14 +289,14 @@ const CATEGORY_RULES: CategoryRule[] = [
  */
 export function predictCategoryHeuristic(productName: string): string | null {
   if (!productName || !productName.trim()) return null;
-  const raw = productName.toLowerCase().trim();
+  const raw = productName.normalize('NFC').toLowerCase().trim();
   // Tokenize into clean words
   const words = raw.split(/[\s,./\-_+&()]+/).filter(Boolean);
 
   // 1. Direct word check (highest priority: if word is exact keyword like 'wallet', 'watch', etc.)
   for (const rule of CATEGORY_RULES) {
     for (const kw of rule.keywords) {
-      const kwLower = kw.toLowerCase();
+      const kwLower = kw.normalize('NFC').toLowerCase();
       // Check if any word exactly matches the keyword
       if (words.includes(kwLower)) {
         return rule.category;
@@ -297,7 +315,7 @@ export function predictCategoryHeuristic(productName: string): string | null {
   // 1.5 Direct substring check for unambiguous terms (length >= 4 or specific Bengali terms)
   for (const rule of CATEGORY_RULES) {
     for (const kw of rule.keywords) {
-      const kwLower = kw.toLowerCase();
+      const kwLower = kw.normalize('NFC').toLowerCase();
       if (kwLower.length >= 4 && raw.includes(kwLower)) {
         return rule.category;
       }
@@ -311,7 +329,7 @@ export function predictCategoryHeuristic(productName: string): string | null {
   for (const rule of CATEGORY_RULES) {
     let score = 0;
     for (const kw of rule.keywords) {
-      const kwLower = kw.toLowerCase();
+      const kwLower = kw.normalize('NFC').toLowerCase();
       if (raw === kwLower) {
         score += 20;
       } else if (raw.startsWith(kwLower + ' ') || raw.endsWith(' ' + kwLower)) {
@@ -328,6 +346,95 @@ export function predictCategoryHeuristic(productName: string): string | null {
   }
 
   return highestScore >= 5 ? bestCategory : null;
+}
+
+/**
+ * Resolve unified AI-based parent category for any product (existing or new).
+ * Deduplicates manual/variant category names (e.g. ওয়ালেট, মেস ওয়ালেট -> Wallet;
+ * লেডিস ব্যাগ, জেন্টস ব্যাগ -> Bag; হাতঘড়ি, স্মার্টওয়াচ -> Watch) without mutating stored data.
+ */
+export function resolveProductAICategory(product: {
+  name: string;
+  category?: string;
+}): string {
+  const rawCat = (product.category || '').normalize('NFC').trim();
+  const rawName = (product.name || '').normalize('NFC').trim();
+
+  if (rawCat) {
+    const matchedFromCat = predictCategoryHeuristic(rawCat);
+    if (matchedFromCat) return matchedFromCat;
+  }
+
+  if (rawName) {
+    const matchedFromName = predictCategoryHeuristic(rawName);
+    if (matchedFromName) return matchedFromName;
+  }
+
+  return rawCat || 'অন্যান্য';
+}
+
+/**
+ * Resolve sub-category inside broad AI categories (like Bag -> লেডিস ব্যাগ / জেন্টস ব্যাগ,
+ * Watch -> স্মার্ট ওয়াচ / লেডিস ওয়াচ / জেন্টস ওয়াচ) while keeping Wallet unified.
+ */
+export function resolveProductSubCategory(
+  product: { name: string; category?: string },
+  aiCategory: string
+): string | null {
+  const rawCat = (product.category || '').normalize('NFC').trim();
+  const rawName = (product.name || '').normalize('NFC').trim();
+  const combined = `${rawCat} ${rawName}`.normalize('NFC').toLowerCase();
+
+  if (aiCategory === 'Bag') {
+    if (
+      /লেডিস|ladies|women|girls|female|ভ্যানিটি|vanity|হ্যান্ডব্যাগ|হ্যান্ড ব্যাগ|handbag|টোট|tote/.test(
+        combined
+      )
+    ) {
+      return 'লেডিস ব্যাগ';
+    }
+    if (
+      /জেন্টস|gents|মেনস|মেন্স|মেস|mens|men\b|সাইড ব্যাগ|side bag|মেসেঞ্জার|messenger|ক্রসবডি|crossbody|অফিস ব্যাগ|office bag/.test(
+        combined
+      )
+    ) {
+      return 'জেন্টস ব্যাগ';
+    }
+    if (/স্কুল|school|ব্যাকপ্যাক|backpack|ল্যাপটপ|laptop/.test(combined)) {
+      return 'ব্যাকপ্যাক / স্কুল ব্যাগ';
+    }
+    if (/ট্রাভেল|travel|লাগেজ|luggage|suitcase|ট্রলি|trolley/.test(combined)) {
+      return 'ট্রাভেল ব্যাগ';
+    }
+    if (rawCat && !['bag', 'bags', 'ব্যাগ', 'ব্যাগস'].includes(rawCat.toLowerCase())) {
+      return rawCat;
+    }
+    return 'অন্যান্য ব্যাগ';
+  }
+
+  if (aiCategory === 'Watch') {
+    if (/স্মার্ট|smart/.test(combined)) {
+      return 'স্মার্ট ওয়াচ';
+    }
+    if (/লেডিস|ladies|women|girls|female/.test(combined)) {
+      return 'লেডিস ওয়াচ';
+    }
+    if (/জেন্টস|gents|মেনস|মেন্স|মেস|mens|men\b/.test(combined)) {
+      return 'জেন্টস ওয়াচ';
+    }
+    if (/দেয়াল|দেয়াল|wall|টেবিল|table|clock/.test(combined)) {
+      return 'দেয়াল / টেবিল ঘড়ি';
+    }
+    if (
+      rawCat &&
+      !['watch', 'watches', 'ওয়াচ', 'ওয়াচ', 'ঘড়ি', 'ঘড়ি'].includes(rawCat.toLowerCase())
+    ) {
+      return rawCat;
+    }
+    return 'ক্লাসিক ওয়াচ';
+  }
+
+  return null;
 }
 
 /**

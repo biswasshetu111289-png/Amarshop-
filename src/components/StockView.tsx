@@ -11,6 +11,8 @@ import {
 import {
   autoSuggestCategory,
   predictCategoryHeuristic,
+  resolveProductAICategory,
+  resolveProductSubCategory,
   COMMON_CATEGORIES,
 } from '../services/aiCategoryService';
 import { Product, PRODUCT_UNITS, ProductUnit } from '../types';
@@ -85,6 +87,7 @@ export const StockView: React.FC<StockViewProps> = ({ initialFilter = 'available
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCSVModal, setShowCSVModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -209,40 +212,148 @@ export const StockView: React.FC<StockViewProps> = ({ initialFilter = 'available
     return () => clearTimeout(timer);
   }, [formName, isCategoryManuallyEdited]);
 
-  // Calculate distinct categories
-  const categories = useMemo(() => {
-    const set = new Set<string>();
+  // Map each product to its unified AI Category & optional Sub-category (non-destructive)
+  const productCategoryMap = useMemo(() => {
+    const map = new Map<string, { aiCategory: string; subCategory: string | null }>();
     products.forEach((p) => {
-      if (p.category && p.category.trim()) set.add(p.category.trim());
+      const aiCategory = resolveProductAICategory(p);
+      const subCategory = resolveProductSubCategory(p, aiCategory);
+      map.set(p.id, { aiCategory, subCategory });
     });
-    return Array.from(set);
+    return map;
   }, [products]);
+
+  // Calculate unified AI categories with available stock count (> 0) and sub-categories
+  const { categoryStats, totalAvailableStockQty, subCategoryStats } = useMemo(() => {
+    const catMap = new Map<
+      string,
+      {
+        name: string;
+        availableStockQty: number;
+        availableItemCount: number;
+        hasItemsInActiveTab: boolean;
+      }
+    >();
+    const subMap = new Map<
+      string,
+      {
+        name: string;
+        availableStockQty: number;
+        availableItemCount: number;
+        hasItemsInActiveTab: boolean;
+      }
+    >();
+    let totalAvailQty = 0;
+
+    products.forEach((p) => {
+      const qty = Number(p.qty) || 0;
+      const availQty = qty > 0 ? qty : 0;
+      totalAvailQty += availQty;
+
+      const inActiveTab =
+        stockFilter === 'all' ||
+        (stockFilter === 'available' && qty > 0) ||
+        (stockFilter === 'zero' && qty <= 0);
+
+      const meta = productCategoryMap.get(p.id);
+      const aiCat = meta?.aiCategory || 'অন্যান্য';
+      const subCat = meta?.subCategory || null;
+
+      const existing = catMap.get(aiCat) || {
+        name: aiCat,
+        availableStockQty: 0,
+        availableItemCount: 0,
+        hasItemsInActiveTab: false,
+      };
+      existing.availableStockQty += availQty;
+      if (qty > 0) existing.availableItemCount += 1;
+      if (inActiveTab) existing.hasItemsInActiveTab = true;
+      catMap.set(aiCat, existing);
+
+      if (selectedCategory !== 'all' && aiCat === selectedCategory && subCat) {
+        const subExisting = subMap.get(subCat) || {
+          name: subCat,
+          availableStockQty: 0,
+          availableItemCount: 0,
+          hasItemsInActiveTab: false,
+        };
+        subExisting.availableStockQty += availQty;
+        if (qty > 0) subExisting.availableItemCount += 1;
+        if (inActiveTab) subExisting.hasItemsInActiveTab = true;
+        subMap.set(subCat, subExisting);
+      }
+    });
+
+    const roundQty = (n: number) => Math.round(n * 100) / 100;
+
+    const categoryStats = Array.from(catMap.values())
+      .filter((c) => c.hasItemsInActiveTab)
+      .map((c) => ({ ...c, availableStockQty: roundQty(c.availableStockQty) }))
+      .sort((a, b) => b.availableStockQty - a.availableStockQty || a.name.localeCompare(b.name));
+
+    const subCategoryStats = Array.from(subMap.values())
+      .filter((s) => s.hasItemsInActiveTab)
+      .map((s) => ({ ...s, availableStockQty: roundQty(s.availableStockQty) }))
+      .sort((a, b) => b.availableStockQty - a.availableStockQty || a.name.localeCompare(b.name));
+
+    return {
+      categoryStats,
+      totalAvailableStockQty: roundQty(totalAvailQty),
+      subCategoryStats,
+    };
+  }, [products, productCategoryMap, stockFilter, selectedCategory]);
+
+  // Reset selected category/sub-category if filtered out by tab switch
+  useEffect(() => {
+    if (
+      selectedCategory !== 'all' &&
+      !categoryStats.some((c) => c.name === selectedCategory)
+    ) {
+      setSelectedCategory('all');
+      setSelectedSubCategory('all');
+    } else if (
+      selectedSubCategory !== 'all' &&
+      !subCategoryStats.some((s) => s.name === selectedSubCategory)
+    ) {
+      setSelectedSubCategory('all');
+    }
+  }, [categoryStats, subCategoryStats, selectedCategory, selectedSubCategory]);
 
   // Counts for stock filter options
   const availableCount = useMemo(() => products.filter((p) => p.qty > 0).length, [products]);
   const zeroCount = useMemo(() => products.filter((p) => p.qty <= 0).length, [products]);
   const allCount = products.length;
 
-  // Filter products by stock availability, search and category
+  // Filter products by stock availability, search, AI category and sub-category
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       // 1. Available Stock (Without Zero) vs All Product List vs Zero Stock
       if (stockFilter === 'available' && p.qty <= 0) return false;
       if (stockFilter === 'zero' && p.qty > 0) return false;
 
+      const meta = productCategoryMap.get(p.id);
+      const aiCat = meta?.aiCategory || 'অন্যান্য';
+      const subCat = meta?.subCategory || null;
+
       // 2. Search match
+      const q = searchTerm.toLowerCase();
       const matchSearch =
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.category && p.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (p.color && p.color.toLowerCase().includes(searchTerm.toLowerCase()));
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        (p.category && p.category.toLowerCase().includes(q)) ||
+        aiCat.toLowerCase().includes(q) ||
+        (subCat && subCat.toLowerCase().includes(q)) ||
+        (p.color && p.color.toLowerCase().includes(q));
 
-      // 3. Category match
+      // 3. AI Category & Sub-category match
       const matchCat =
-        selectedCategory === 'all' || p.category === selectedCategory;
+        selectedCategory === 'all' || aiCat === selectedCategory;
+      const matchSubCat =
+        selectedSubCategory === 'all' || subCat === selectedSubCategory;
 
-      return matchSearch && matchCat;
+      return matchSearch && matchCat && matchSubCat;
     });
-  }, [products, stockFilter, searchTerm, selectedCategory]);
+  }, [products, stockFilter, searchTerm, selectedCategory, selectedSubCategory, productCategoryMap]);
 
   const openAddModal = () => {
     if (!canManage) {
@@ -752,31 +863,99 @@ export const StockView: React.FC<StockViewProps> = ({ initialFilter = 'available
           )}
         </div>
 
-        {/* Category Horizontal Filter Tags */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1 rounded-xl whitespace-nowrap font-medium transition ${
-              selectedCategory === 'all'
-                ? 'bg-blue-600 text-white font-bold'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {language === 'bn' ? 'সকল' : 'All'} ({formatNumber(products.length, language)})
-          </button>
-          {categories.map((cat) => (
+        {/* AI-Based Unified Category Filter Tags with Available Stock in Brackets */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-xl whitespace-nowrap font-medium transition ${
-                selectedCategory === cat
-                  ? 'bg-blue-600 text-white font-bold'
+              type="button"
+              onClick={() => {
+                setSelectedCategory('all');
+                setSelectedSubCategory('all');
+              }}
+              className={`px-3 py-1 rounded-xl whitespace-nowrap font-medium transition flex items-center gap-1 ${
+                selectedCategory === 'all'
+                  ? 'bg-blue-600 text-white font-bold shadow-2xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {cat}
+              <span>{language === 'bn' ? 'সকল' : 'All'}</span>
+              <span
+                className={`text-[10px] ${
+                  selectedCategory === 'all' ? 'text-blue-100' : 'text-slate-500'
+                }`}
+              >
+                ({formatNumber(totalAvailableStockQty, language)})
+              </span>
             </button>
-          ))}
+            {categoryStats.map((cat) => (
+              <button
+                key={cat.name}
+                type="button"
+                onClick={() => {
+                  setSelectedCategory(cat.name);
+                  setSelectedSubCategory('all');
+                }}
+                className={`px-3 py-1 rounded-xl whitespace-nowrap font-medium transition flex items-center gap-1 ${
+                  selectedCategory === cat.name
+                    ? 'bg-blue-600 text-white font-bold shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <span>{cat.name}</span>
+                <span
+                  className={`text-[10px] ${
+                    selectedCategory === cat.name ? 'text-blue-100' : 'text-slate-500'
+                  }`}
+                >
+                  ({formatNumber(cat.availableStockQty, language)})
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Sub-Category Bar inside Bag / Watch etc. when multiple sub-types exist */}
+          {selectedCategory !== 'all' && subCategoryStats.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 pl-1 border-t border-slate-100 text-[11px] no-scrollbar animate-in fade-in">
+              <span className="text-[10px] font-bold text-indigo-600 whitespace-nowrap flex items-center gap-0.5">
+                <Sparkles className="w-3 h-3" />
+                {selectedCategory}:
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedSubCategory('all')}
+                className={`px-2.5 py-0.5 rounded-lg whitespace-nowrap font-medium transition flex items-center gap-1 ${
+                  selectedSubCategory === 'all'
+                    ? 'bg-indigo-600 text-white font-bold'
+                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                }`}
+              >
+                <span>{language === 'bn' ? `সব ${selectedCategory}` : `All ${selectedCategory}`}</span>
+                <span className={`text-[9px] ${selectedSubCategory === 'all' ? 'text-indigo-100' : 'text-indigo-500'}`}>
+                  ({formatNumber(
+                    categoryStats.find((c) => c.name === selectedCategory)?.availableStockQty || 0,
+                    language
+                  )})
+                </span>
+              </button>
+              {subCategoryStats.map((sub) => (
+                <button
+                  key={sub.name}
+                  type="button"
+                  onClick={() => setSelectedSubCategory(sub.name)}
+                  className={`px-2.5 py-0.5 rounded-lg whitespace-nowrap font-medium transition flex items-center gap-1 ${
+                    selectedSubCategory === sub.name
+                      ? 'bg-indigo-600 text-white font-bold'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{sub.name}</span>
+                  <span className={`text-[9px] ${selectedSubCategory === sub.name ? 'text-indigo-100' : 'text-slate-500'}`}>
+                    ({formatNumber(sub.availableStockQty, language)})
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -872,11 +1051,16 @@ export const StockView: React.FC<StockViewProps> = ({ initialFilter = 'available
                       <td className="py-2.5 px-3">
                         <div className="font-bold text-slate-900 leading-snug">{p.name}</div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                          {p.category && (
-                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-medium">
-                              {p.category}
-                            </span>
-                          )}
+                          {(() => {
+                            const catInfo = productCategoryMap.get(p.id);
+                            const displayCat = catInfo?.aiCategory || p.category;
+                            const displaySub = catInfo?.subCategory;
+                            return displayCat ? (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-medium">
+                                {displaySub ? `${displayCat} • ${displaySub}` : displayCat}
+                              </span>
+                            ) : null;
+                          })()}
                           {(p.colors && p.colors.length > 0) ? (
                             p.colors.map((c) => (
                               <span
