@@ -256,6 +256,7 @@ export function buildShopSpreadsheetTabs(shop: Shop, data: ShopFullData): TabPay
       'বিক্রয়মূল্য (Sell Price)',
       'প্রতি ইউনিট লাভ (Unit Profit)',
       'কালার (Colors)',
+      'বারকোড (Barcode)',
     ],
     ...products.map((p) => {
       const buy = Number(p.buyPrice) || 0;
@@ -273,6 +274,7 @@ export function buildShopSpreadsheetTabs(shop: Shop, data: ShopFullData): TabPay
         sell,
         sell - (buy + pkg),
         colors,
+        p.barcode || '',
       ];
     }),
   ];

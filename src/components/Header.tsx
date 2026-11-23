@@ -672,9 +672,9 @@ export const Header: React.FC = () => {
               title="দোকান পরিবর্তন করুন"
             >
               <img
-                src={currentShop?.logoUrl || '/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png'}
+                src={currentShop?.logoUrl || '/assets/aistudio/file_00000000c2a882309c8990fa8c4569eb_c897d5b0.png'}
                 alt={currentShop?.name || 'My Business'}
-                className="w-full h-full object-cover rounded-xl"
+                className="w-full h-full object-cover rounded-xl bg-white"
               />
               {pendingRequestsCount > 0 && isAdmin && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center border-2 border-indigo-700 animate-pulse">
@@ -1478,9 +1478,9 @@ export const Header: React.FC = () => {
                   <div className="bg-white/90 p-2.5 rounded-lg border border-indigo-100 flex items-start gap-3">
                     <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
                       <img
-                        src={currentShop.logoUrl || '/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png'}
+                        src={currentShop.logoUrl || '/assets/aistudio/file_00000000c2a882309c8990fa8c4569eb_c897d5b0.png'}
                         alt={currentShop.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover bg-white"
                       />
                     </div>
                     <div className="flex-1 space-y-1 text-[11px]">

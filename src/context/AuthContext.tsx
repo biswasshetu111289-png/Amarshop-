@@ -269,17 +269,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Google Sign-In with Firebase Auth (also requests Workspace scopes)
+  // Standard Google Sign-In with Firebase Auth (basic email/profile only - no sensitive Workspace scopes on login)
   const loginWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
-    WORKSPACE_SCOPES.forEach((scope) => provider.addScope(scope));
     provider.setCustomParameters({ prompt: 'select_account' });
     const cred = await signInWithPopup(auth, provider);
-    const oauthCred = GoogleAuthProvider.credentialFromResult(cred);
-    if (oauthCred?.accessToken) {
-      cachedWorkspaceToken = oauthCred.accessToken;
-      setHasWorkspaceToken(true);
-    }
     const appUser: AppUser = {
       uid: cred.user.uid,
       email: cred.user.email,
@@ -289,11 +283,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(CURRENT_SESSION_KEY, JSON.stringify(appUser));
   }, []);
 
-  // Obtain / refresh Google Workspace access token (Sheets & Drive) via Firebase Auth popup
+  // Obtain / refresh Google Workspace access token (Sheets & Drive) explicitly when user requests Sheets sync
   const connectGoogleWorkspace = useCallback(async (): Promise<string> => {
     const provider = new GoogleAuthProvider();
     WORKSPACE_SCOPES.forEach((scope) => provider.addScope(scope));
-    provider.setCustomParameters({ prompt: 'consent select_account' });
 
     let result;
     const currentFbUser = auth.currentUser;
@@ -302,8 +295,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (p) => p.providerId === 'google.com'
       );
       if (hasGoogleProvider) {
+        provider.setCustomParameters({
+          prompt: 'consent',
+          ...(currentFbUser.email ? { login_hint: currentFbUser.email } : {}),
+        });
         result = await reauthenticateWithPopup(currentFbUser, provider);
       } else {
+        provider.setCustomParameters({ prompt: 'consent select_account' });
         try {
           result = await linkWithPopup(currentFbUser, provider);
         } catch (linkErr: any) {

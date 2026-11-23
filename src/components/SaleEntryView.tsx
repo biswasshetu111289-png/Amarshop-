@@ -31,7 +31,11 @@ import {
   Coins,
   Phone,
   Receipt,
+  ScanBarcode,
+  Camera,
 } from 'lucide-react';
+import { BarcodeScannerModal } from './BarcodeScannerModal';
+import { normalizeBarcode, playScanBeep } from '../utils/barcode';
 
 interface CartItem {
   tempId: string;
@@ -43,6 +47,7 @@ interface CartItem {
   total: number;
   packagingPrice: number;
   color: string;
+  imageUrl?: string;
 }
 
 export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
@@ -70,6 +75,8 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   const [addressSearch, setAddressSearch] = useState("");
   const [completedSalesForInvoice, setCompletedSalesForInvoice] = useState<Sale[] | null>(null);
   const [addressNotice, setAddressNotice] = useState<string | null>(null);
+  const [barcodeScanInput, setBarcodeScanInput] = useState('');
+  const [showPosScanner, setShowPosScanner] = useState(false);
 
   // Address book compiled from all past sales & customer dues
   const customerAddressBook = React.useMemo(() => {
@@ -274,6 +281,110 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
       .filter((item) => item.productId === productId)
       .reduce((sum, item) => sum + item.qty, 0);
 
+  // Add 1 unit directly to cart by scanned barcode (supports both camera & USB/Bluetooth scanner)
+  const handleBarcodeMatch = (rawCode: string) => {
+    const clean = normalizeBarcode(rawCode);
+    if (!clean) return;
+
+    const matched = products.find(
+      (p) => normalizeBarcode(p.barcode).toLowerCase() === clean.toLowerCase()
+    );
+    if (!matched) {
+      showToast(
+        language === 'bn'
+          ? `বারকোড "${clean}" দিয়ে কোনো প্রোডাক্ট পাওয়া যায়নি`
+          : `No product found with barcode "${clean}"`,
+        'warning'
+      );
+      return;
+    }
+
+    // Use functional update or current check carefully
+    const usedInCart = cartItems
+      .filter((item) => item.productId === matched.id)
+      .reduce((sum, item) => sum + item.qty, 0);
+    const remaining = matched.qty - usedInCart;
+
+    if (remaining <= 0) {
+      showToast(
+        language === 'bn'
+          ? `"${matched.name}" এর স্টক শেষ বা সম্পূর্ণ কার্টে যোগ হয়েছে!`
+          : `"${matched.name}" is out of stock!`,
+        'error'
+      );
+      return;
+    }
+
+    const addQty = Math.min(1, remaining);
+    const pColors =
+      matched.colors && matched.colors.length > 0
+        ? matched.colors
+        : matched.color
+        ? matched.color.split(',').map((c) => c.trim()).filter(Boolean)
+        : [];
+    const defaultColor = pColors[0] || matched.color || '';
+    const unitPrice = Number(matched.sellPrice) || 0;
+
+    setCartItems((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) =>
+          item.productId === matched.id &&
+          item.price === unitPrice &&
+          item.color === defaultColor
+      );
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        const updatedQty = next[existingIdx].qty + addQty;
+        if (updatedQty > matched.qty) {
+          return prev;
+        }
+        next[existingIdx] = {
+          ...next[existingIdx],
+          qty: updatedQty,
+          total: updatedQty * unitPrice,
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          tempId: `cart_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          productId: matched.id,
+          productName: matched.name,
+          unit: matched.unit,
+          qty: addQty,
+          price: unitPrice,
+          total: addQty * unitPrice,
+          packagingPrice: matched.packagingPrice || 0,
+          color: defaultColor,
+          imageUrl: matched.imageUrl || '',
+        },
+      ];
+    });
+
+    playScanBeep();
+    showToast(
+      language === 'bn'
+        ? `✓ "${matched.name}" কার্টে যোগ হয়েছে (${formatCurrency(unitPrice, language)})`
+        : `✓ "${matched.name}" added to cart`,
+      'success'
+    );
+  };
+
+  // Filtered quick-search matches when typing name or partial barcode in the scan box
+  const quickSearchMatches = React.useMemo(() => {
+    const q = barcodeScanInput.trim().toLowerCase();
+    if (!q) return [];
+    return availableProducts
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+          (p.color && p.color.toLowerCase().includes(q))
+      )
+      .slice(0, 6);
+  }, [barcodeScanInput, availableProducts]);
+
   const handleAddToCart = () => {
     if (!selectedProductId || !currentProduct) {
       showToast(
@@ -343,6 +454,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           total: lineTotal,
           packagingPrice: currentProduct.packagingPrice || 0,
           color: chosenColor,
+          imageUrl: currentProduct.imageUrl || '',
         },
       ];
     });
@@ -410,6 +522,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         total: saleQty * salePrice,
         packagingPrice: currentProduct.packagingPrice || 0,
         color: saleColor.trim() || currentProduct.color || '',
+        imageUrl: currentProduct.imageUrl || '',
       });
     }
 
@@ -642,6 +755,145 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
       {/* Main Sale Form Card */}
       <div className="bg-white rounded-2xl p-4.5 border border-slate-100 shadow-sm">
         <form onSubmit={handleSubmitSale} className="space-y-4">
+          {/* Fast Barcode Scan / Quick Product Lookup Bar */}
+          <div className="p-2.5 bg-gradient-to-r from-indigo-50/90 via-blue-50/80 to-cyan-50/70 border border-indigo-200/80 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                <ScanBarcode className="w-3.5 h-3.5 text-indigo-600" />
+                <span>
+                  {language === 'bn'
+                    ? 'দ্রুত বারকোড স্ক্যান বা পণ্য খুঁজুন (POS)'
+                    : 'Quick Barcode Scan / Lookup (POS)'}
+                </span>
+              </span>
+              <span className="text-[10px] text-indigo-700 font-medium hidden sm:inline">
+                {language === 'bn' ? 'USB স্ক্যানার বা ক্যামেরা সাপোর্টেড' : 'USB & Camera ready'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-indigo-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={barcodeScanInput}
+                  onChange={(e) => setBarcodeScanInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const clean = barcodeScanInput.trim();
+                      if (!clean) return;
+                      const exactBarcode = products.find(
+                        (p) => normalizeBarcode(p.barcode).toLowerCase() === clean.toLowerCase()
+                      );
+                      if (exactBarcode) {
+                        handleBarcodeMatch(clean);
+                        setBarcodeScanInput('');
+                      } else if (quickSearchMatches.length === 1) {
+                        const only = quickSearchMatches[0];
+                        setSelectedProductId(only.id);
+                        setBarcodeScanInput('');
+                        showToast(`"${only.name}" সিলেক্ট হয়েছে`, 'info');
+                      } else {
+                        handleBarcodeMatch(clean);
+                      }
+                    }
+                  }}
+                  placeholder={
+                    language === 'bn'
+                      ? 'বারকোড স্ক্যান করুন (USB) বা নাম লিখুন...'
+                      : 'Scan barcode (USB) or type product name...'
+                  }
+                  className="w-full pl-8 pr-7 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                {barcodeScanInput && (
+                  <button
+                    type="button"
+                    onClick={() => setBarcodeScanInput('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowPosScanner(true)}
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs shrink-0 transition cursor-pointer"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>{language === 'bn' ? 'স্ক্যান' : 'Scan'}</span>
+              </button>
+            </div>
+
+            {/* Quick-pick visual search results with thumbnails */}
+            {quickSearchMatches.length > 0 && (
+              <div className="bg-white border border-indigo-100 rounded-xl divide-y divide-slate-100 max-h-52 overflow-y-auto shadow-xs">
+                {quickSearchMatches.map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-2 flex items-center justify-between gap-2 hover:bg-blue-50/60 transition"
+                  >
+                    <div
+                      onClick={() => {
+                        setSelectedProductId(p.id);
+                        setBarcodeScanInput('');
+                      }}
+                      className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
+                    >
+                      {p.imageUrl ? (
+                        <img
+                          src={p.imageUrl}
+                          alt={p.name}
+                          className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-400">
+                          <Package className="w-4 h-4" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{p.name}</p>
+                        <p className="text-[10px] text-slate-500 flex items-center gap-1.5">
+                          <span>{formatCurrency(p.sellPrice, language)}</span>
+                          <span>•</span>
+                          <span>
+                            {language === 'bn' ? 'মজুদ:' : 'Stock:'}{' '}
+                            {formatQty(Math.max(0, p.qty - getUsedQtyInCart(p.id)), p.unit, language)}
+                          </span>
+                          {p.barcode && (
+                            <span className="font-mono text-cyan-700">#{p.barcode}</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (p.barcode) {
+                          handleBarcodeMatch(p.barcode);
+                        } else {
+                          setSelectedProductId(p.id);
+                        }
+                        setBarcodeScanInput('');
+                      }}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold shrink-0 cursor-pointer"
+                    >
+                      {p.barcode
+                        ? language === 'bn'
+                          ? '+ কার্ট'
+                          : '+ Cart'
+                        : language === 'bn'
+                        ? 'সিলেক্ট'
+                        : 'Select'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Product Select */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -669,16 +921,33 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
               ))}
             </select>
 
-            {/* Display Selected Product Stock & Details Info */}
+            {/* Display Selected Product Photo, Stock & Details Info */}
             {currentProduct && (
-              <div className="mt-2 p-2.5 bg-blue-50/70 border border-blue-100 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div>
-                  <span className="text-slate-600">
-                    {language === 'bn' ? 'বর্তমান স্টক: ' : 'Current Stock: '}
-                  </span>
-                  <span className="font-bold text-blue-700">
-                    {formatQty(Math.max(0, currentProduct.qty - getUsedQtyInCart(currentProduct.id)), currentProduct.unit, language)}
-                  </span>
+              <div className="mt-2 p-2.5 bg-blue-50/70 border border-blue-100 rounded-xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                <div className="flex items-center gap-2.5">
+                  {currentProduct.imageUrl && (
+                    <img
+                      src={currentProduct.imageUrl}
+                      alt={currentProduct.name}
+                      className="w-12 h-12 rounded-xl object-cover border border-blue-200 bg-white shrink-0 shadow-2xs"
+                    />
+                  )}
+                  <div>
+                    <div>
+                      <span className="text-slate-600">
+                        {language === 'bn' ? 'বর্তমান স্টক: ' : 'Current Stock: '}
+                      </span>
+                      <span className="font-bold text-blue-700">
+                        {formatQty(Math.max(0, currentProduct.qty - getUsedQtyInCart(currentProduct.id)), currentProduct.unit, language)}
+                      </span>
+                    </div>
+                    {currentProduct.barcode && (
+                      <div className="text-[10px] font-mono text-cyan-800 flex items-center gap-1 mt-0.5">
+                        <ScanBarcode className="w-3 h-3 text-cyan-600" />
+                        <span>{currentProduct.barcode}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {/* Selectable Color Variant Chips if product has colors */}
                 {(() => {
@@ -823,14 +1092,23 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
                     key={item.tempId}
                     className="px-3 py-2 flex items-center justify-between gap-2 text-xs"
                   >
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-900 truncate">
-                        {language === 'bn' ? toBengaliNumber(idx + 1) : idx + 1}. {item.productName}
-                        {item.color ? ` (${item.color})` : ''}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        {formatQty(item.qty, item.unit, language)} × {formatCurrency(item.price, language)}
-                      </p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {item.imageUrl && (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.productName}
+                          className="w-8 h-8 rounded-lg object-cover border border-indigo-100 shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 truncate">
+                          {language === 'bn' ? toBengaliNumber(idx + 1) : idx + 1}. {item.productName}
+                          {item.color ? ` (${item.color})` : ''}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {formatQty(item.qty, item.unit, language)} × {formatCurrency(item.price, language)}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="font-extrabold text-slate-900">
@@ -1496,6 +1774,21 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           }}
         />
       )}
+
+      {/* POS Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={showPosScanner}
+        onClose={() => setShowPosScanner(false)}
+        continuousMode={true}
+        language={language}
+        title={language === 'bn' ? 'সেলস বারকোড স্ক্যানার (POS)' : 'POS Barcode Scanner'}
+        subtitle={
+          language === 'bn'
+            ? 'স্ক্যান করার সাথে সাথে পণ্য কার্টে যোগ হয়ে যাবে'
+            : 'Scanned products automatically add to your cart'
+        }
+        onScan={(code) => handleBarcodeMatch(code)}
+      />
     </div>
   );
 };

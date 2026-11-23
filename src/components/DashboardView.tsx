@@ -320,9 +320,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* Welcome Banner / Today Overview with Current Shop Name */}
       <div className={`${bannerBgClass} rounded-2xl p-4 text-white shadow-md flex items-center justify-between transition-colors duration-300`} style={bannerStyle}>
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-white/20 border border-white/30 overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-white/95 border border-white/30 overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
             <img
-              src={currentShop?.logoUrl || '/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png'}
+              src={currentShop?.logoUrl || '/assets/aistudio/file_00000000c2a882309c8990fa8c4569eb_c897d5b0.png'}
               alt={currentShop?.name || 'My Business'}
               className="w-full h-full object-cover"
             />

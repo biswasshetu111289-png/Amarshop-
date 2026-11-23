@@ -97,6 +97,8 @@ export interface Product {
   color?: string; // কালার অপশন (e.g. লাল, নীল, কালো ইত্যাদি)
   colors?: string[]; // একাধিক কালারের তালিকা (যেমন: ['লাল', 'নীল', 'কালো'])
   colorVariants?: ProductColorVariant[]; // প্রতি কালারের স্টক সংখ্যা
+  imageUrl?: string; // প্রোডাক্টের ঐচ্ছিক কম্প্রেসড ছবি (Data URL)
+  barcode?: string; // ঐচ্ছিক বারকোড / SKU কোড
   createdAt?: Timestamp | { seconds: number; nanoseconds: number } | string;
 }
 

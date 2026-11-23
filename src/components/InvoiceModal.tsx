@@ -72,7 +72,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
     ? primary.invoiceGroupId
     : `MR-${primary.id ? primary.id.slice(-6).toUpperCase() : Date.now().toString().slice(-6)}`;
 
-  const displayLogo = logoUrl || '/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png';
+  const displayLogo = logoUrl || '/assets/aistudio/file_00000000c2a882309c8990fa8c4569eb_c897d5b0.png';
 
   const customerName =
     items.find((s) => s.customer?.trim())?.customer?.trim() ||

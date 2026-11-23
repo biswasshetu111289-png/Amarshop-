@@ -147,6 +147,8 @@ export async function parseBackupFile(file: File): Promise<StoreBackupData> {
         packagingPrice: p.packagingPrice ? Number(p.packagingPrice) : 0,
         color: p.color || '',
         colors: p.colors || (p.color ? [p.color] : []),
+        imageUrl: p.imageUrl || '',
+        barcode: p.barcode || '',
       }))
     : [];
 
@@ -224,6 +226,8 @@ export async function restoreBackupIntoShop(
           packagingPrice: Number(p.packagingPrice) || 0,
           color: p.color || '',
           colors: p.colors || (p.color ? [p.color] : []),
+          imageUrl: p.imageUrl || '',
+          barcode: p.barcode || '',
           createdAt: serverTimestamp(),
         },
         { merge: true }

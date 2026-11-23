@@ -48,10 +48,17 @@ export const AuthView: React.FC = () => {
       const errMsg = err instanceof Error ? err.message : '';
       if (errMsg.includes('popup-closed-by-user')) {
         showToast('Google লগইন উইন্ডো বন্ধ করা হয়েছে', 'warning');
+      } else if (errMsg.includes('popup-blocked')) {
+        showToast('ব্রাউজার পপআপ ব্লক করেছে! অনুগ্রহ করে পপআপ Allow করে আবার চেষ্টা করুন', 'warning');
       } else if (errMsg.includes('unauthorized-domain')) {
         showToast('Firebase কনসোলে এই অ্যাপের ডোমেইন Authorized Domains-এ যুক্ত করতে হবে', 'error');
       } else if (errMsg.includes('operation-not-allowed')) {
         showToast('Firebase Authentication-এ Google Sign-in মেথড অন (Enable) করতে হবে', 'error');
+      } else if (errMsg.includes('access_denied')) {
+        showToast(
+          'Google অ্যাক্সেস অনুমোদিত হয়নি। Google Cloud Console-এ OAuth Consent Screen "Publish App" করা থাকলে যেকোনো Google ইউজার সাইন ইন করতে পারবেন।',
+          'error'
+        );
       } else {
         showToast('Google লগইন সম্পন্ন করা যায়নি। সাধারণ ইমেইল ও পাসওয়ার্ড দিয়েও প্রবেশ করতে পারবেন।', 'error');
       }
@@ -186,9 +193,9 @@ export const AuthView: React.FC = () => {
 
       {/* Branding Header */}
       <div className="text-center mb-5 max-w-sm">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-xl shadow-blue-500/25 overflow-hidden mb-3 border-2 border-white/20 bg-slate-900">
+        <div className="inline-flex items-center justify-center w-22 h-22 rounded-full shadow-xl shadow-blue-500/25 overflow-hidden mb-3 border-2 border-white/40 bg-white">
           <img
-            src="/assets/aistudio/file_00000000312481fabfb649d53c7c85c6_7cd0cbb9.png"
+            src="/assets/aistudio/file_00000000c2a882309c8990fa8c4569eb_c897d5b0.png"
             alt="My Business App Logo"
             className="w-full h-full object-cover"
           />

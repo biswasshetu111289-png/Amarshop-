@@ -668,7 +668,7 @@ export async function saveProduct(
   productData: Omit<Product, 'id' | 'createdAt'> & { id?: string }
 ): Promise<string> {
   const productsRef = getProductsCollection(targetId);
-  const dataToSave = {
+  const dataToSave: Record<string, any> = {
     name: productData.name.trim(),
     qty: Number(productData.qty),
     unit: productData.unit,
@@ -679,6 +679,8 @@ export async function saveProduct(
     color: productData.color?.trim() || '',
     colors: productData.colors || (productData.color ? [productData.color.trim()] : []),
     colorVariants: productData.colorVariants || [],
+    ...(productData.barcode !== undefined ? { barcode: productData.barcode.trim() } : {}),
+    ...(productData.imageUrl !== undefined ? { imageUrl: productData.imageUrl } : {}),
   };
 
   if (productData.id) {
@@ -1057,10 +1059,10 @@ export async function batchImportProducts(
     category?: string;
     packagingPrice?: number;
     color?: string;
+    barcode?: string;
   }>,
   existingProducts: Product[]
 ): Promise<{ added: number; updated: number }> {
-  const batch = writeBatch(db);
   let added = 0;
   let updated = 0;
 
@@ -1071,40 +1073,56 @@ export async function batchImportProducts(
 
   const productsRef = getProductsCollection(targetId);
 
-  for (const item of items) {
-    const normalizedName = item.name.trim().toLowerCase();
-    const existing = existingMap.get(normalizedName);
+  for (let i = 0; i < items.length; i += 400) {
+    const chunk = items.slice(i, i + 400);
+    const batch = writeBatch(db);
 
-    if (existing) {
-      const docRef = doc(productsRef, existing.id);
-      batch.update(docRef, {
-        qty: Number(item.qty),
-        unit: item.unit || existing.unit,
-        buyPrice: Number(item.buyPrice),
-        sellPrice: Number(item.sellPrice),
-        category: item.category || existing.category || '',
-        packagingPrice: Number(item.packagingPrice || existing.packagingPrice || 0),
-        color: item.color || existing.color || '',
-      });
-      updated++;
-    } else {
-      const docRef = doc(productsRef);
-      batch.set(docRef, {
-        name: item.name.trim(),
-        qty: Number(item.qty),
-        unit: item.unit || 'পিস',
-        buyPrice: Number(item.buyPrice),
-        sellPrice: Number(item.sellPrice),
-        category: item.category || '',
-        packagingPrice: Number(item.packagingPrice || 0),
-        color: item.color || '',
-        createdAt: serverTimestamp(),
-      });
-      added++;
+    for (const item of chunk) {
+      const normalizedName = item.name.trim().toLowerCase();
+      const existing = existingMap.get(normalizedName);
+      const parsedColors = item.color
+        ? item.color
+            .split(',')
+            .map((c) => c.trim())
+            .filter(Boolean)
+        : [];
+
+      if (existing) {
+        const docRef = doc(productsRef, existing.id);
+        batch.update(docRef, {
+          qty: Number(item.qty),
+          unit: item.unit || existing.unit,
+          buyPrice: Number(item.buyPrice),
+          sellPrice: Number(item.sellPrice),
+          category: item.category || existing.category || '',
+          packagingPrice: Number(item.packagingPrice || existing.packagingPrice || 0),
+          color: item.color || existing.color || '',
+          colors: parsedColors.length > 0 ? parsedColors : existing.colors || [],
+          barcode: item.barcode?.trim() || existing.barcode || '',
+        });
+        updated++;
+      } else {
+        const docRef = doc(productsRef);
+        batch.set(docRef, {
+          name: item.name.trim(),
+          qty: Number(item.qty),
+          unit: item.unit || 'পিস',
+          buyPrice: Number(item.buyPrice),
+          sellPrice: Number(item.sellPrice),
+          category: item.category || '',
+          packagingPrice: Number(item.packagingPrice || 0),
+          color: item.color || '',
+          colors: parsedColors,
+          barcode: item.barcode?.trim() || '',
+          createdAt: serverTimestamp(),
+        });
+        added++;
+      }
     }
+
+    await batch.commit();
   }
 
-  await batch.commit();
   return { added, updated };
 }
 
