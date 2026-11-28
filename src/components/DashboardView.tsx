@@ -95,6 +95,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   // Edit Sale Form State
   const [editQty, setEditQty] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editDiscount, setEditDiscount] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editPayment, setEditPayment] = useState<PaymentType>('নগদ');
   const [editPaymentMethod, setEditPaymentMethod] = useState<string>('নগদ');
@@ -172,6 +173,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     setEditingSale(sale);
     setEditQty(String(sale.qty));
     setEditPrice(String(sale.price));
+    setEditDiscount(sale.discount ? String(sale.discount) : '');
     setEditDate(sale.date || getTodayString());
     const initialPayment = sale.payment || 'নগদ';
     setEditPayment(initialPayment);
@@ -200,6 +202,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     const qtyNum = parseFloat(editQty);
     const priceNum = parseFloat(editPrice);
     const packPriceNum = editPackagingPrice ? parseFloat(editPackagingPrice) : 0;
+    const rawSubtotal = Math.round(qtyNum * priceNum * 100) / 100;
+    const discountNum = Math.min(
+      rawSubtotal,
+      Math.max(0, editDiscount ? parseFloat(editDiscount) || 0 : 0)
+    );
 
     if (isNaN(qtyNum) || qtyNum <= 0) {
       showToast(language === 'bn' ? 'সঠিক বিক্রির পরিমাণ দিন' : 'Enter valid quantity', 'warning');
@@ -210,7 +217,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       return;
     }
 
-    const totalAmount = qtyNum * priceNum;
+    const totalAmount = Math.max(0, Math.round((rawSubtotal - discountNum) * 100) / 100);
     let finalPaid = 0;
     let finalDue = 0;
 
@@ -223,7 +230,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     } else {
       const parsedPaid = parseFloat(editPaidAmount) || 0;
       finalPaid = parsedPaid;
-      finalDue = Math.max(0, totalAmount - parsedPaid);
+      finalDue = Math.max(0, Math.round((totalAmount - parsedPaid) * 100) / 100);
     }
 
     setUpdatingSale(true);
@@ -237,6 +244,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           qty: qtyNum,
           unit: editingSale.unit,
           price: priceNum,
+          subtotal: rawSubtotal,
+          discount: discountNum,
           total: totalAmount,
           date: editDate,
           payment: editPayment,
@@ -1124,6 +1133,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {language === 'bn' ? 'ডিসকাউন্ট / ছাড় (৳)' : 'Discount (৳)'}
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={editDiscount}
+                  onChange={(e) => setEditDiscount(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 bg-amber-50/60 border border-amber-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
               </div>
 
               <div>

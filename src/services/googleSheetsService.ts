@@ -289,6 +289,8 @@ export function buildShopSpreadsheetTabs(shop: Shop, data: ShopFullData): TabPay
       'পরিমাণ (Qty)',
       'একক (Unit)',
       'দর (Rate)',
+      'সাবটোটাল (Subtotal)',
+      'ডিসকাউন্ট (Discount)',
       'মোট বিল (Total)',
       'পেমেন্ট ধরন (Status)',
       'পরিশোধিত (Paid)',
@@ -302,6 +304,11 @@ export function buildShopSpreadsheetTabs(shop: Shop, data: ShopFullData): TabPay
     ],
     ...sales.map((s) => {
       const total = Number(s.total) || 0;
+      const discount = Number(s.discount) || 0;
+      const subtotal =
+        s.subtotal !== undefined
+          ? Number(s.subtotal)
+          : (Number(s.price) || 0) * (Number(s.qty) || 0);
       const due =
         s.dueAmount !== undefined ? Number(s.dueAmount) : s.payment === 'বাকি' ? total : 0;
       const paid =
@@ -314,6 +321,8 @@ export function buildShopSpreadsheetTabs(shop: Shop, data: ShopFullData): TabPay
         Number(s.qty) || 0,
         s.unit || 'পিস',
         Number(s.price) || 0,
+        subtotal,
+        discount,
         total,
         s.payment || 'নগদ',
         paid,

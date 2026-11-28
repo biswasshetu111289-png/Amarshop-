@@ -140,6 +140,9 @@ export interface Sale {
   qty: number;
   unit: ProductUnit | string;
   price: number;
+  subtotal?: number; // ডিসকাউন্টের আগে মূল্য (qty * price)
+  discount?: number; // মোট ছাড় / ডিসকাউন্ট (৳)
+  discountPercent?: number; // শতকরা ছাড়ের হার (%) - ঐচ্ছিক
   total: number;
   date: string; // YYYY-MM-DD
   payment: PaymentType;

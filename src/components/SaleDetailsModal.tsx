@@ -96,6 +96,12 @@ export const SaleDetailsModal: React.FC<SaleDetailsModalProps> = ({
               <span className="text-[11px] text-slate-500 block mt-0.5">
                 {formatQty(sale.qty, sale.unit, language)} @ {formatCurrency(sale.price, language)}
               </span>
+              {Number(sale.discount || 0) > 0 && (
+                <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-bold">
+                  আসল: {formatCurrency(sale.subtotal ?? sale.price * sale.qty, language)} • ছাড়: -
+                  {formatCurrency(Number(sale.discount), language)}
+                </span>
+              )}
             </div>
             <div className="text-right">
               <span

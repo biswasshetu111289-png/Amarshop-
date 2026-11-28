@@ -55,6 +55,7 @@ export const SalesHistoryView: React.FC = () => {
   const [editQty, setEditQty] = useState('');
   const [editUnit, setEditUnit] = useState<ProductUnit | string>('পিস');
   const [editPrice, setEditPrice] = useState('');
+  const [editDiscount, setEditDiscount] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editPayment, setEditPayment] = useState<PaymentType>('নগদ');
   const [editPaymentMethod, setEditPaymentMethod] = useState<string>('নগদ');
@@ -139,7 +140,7 @@ export const SalesHistoryView: React.FC = () => {
       } else if (s.productName && productBuyPriceMap.has(s.productName.trim().toLowerCase())) {
         itemCost = productBuyPriceMap.get(s.productName.trim().toLowerCase())!;
       }
-      const itemProfit = (s.price - itemCost) * s.qty;
+      const itemProfit = Number(s.total || 0) - itemCost * Number(s.qty || 0);
       totalProfit += itemProfit;
     }
 
@@ -163,6 +164,7 @@ export const SalesHistoryView: React.FC = () => {
     setEditQty(String(sale.qty));
     setEditUnit(sale.unit || 'পিস');
     setEditPrice(String(sale.price));
+    setEditDiscount(sale.discount ? String(sale.discount) : '');
     setEditDate(sale.date || getTodayString());
     const initialPayment = sale.payment || 'নগদ';
     setEditPayment(initialPayment);
@@ -201,6 +203,11 @@ export const SalesHistoryView: React.FC = () => {
     const qtyNum = parseFloat(editQty);
     const priceNum = parseFloat(editPrice);
     const packPriceNum = editPackagingPrice ? parseFloat(editPackagingPrice) : 0;
+    const rawSubtotal = Math.round(qtyNum * priceNum * 100) / 100;
+    const discountNum = Math.min(
+      rawSubtotal,
+      Math.max(0, editDiscount ? parseFloat(editDiscount) || 0 : 0)
+    );
 
     if (isNaN(qtyNum) || qtyNum <= 0) {
       showToast(
@@ -228,14 +235,14 @@ export const SalesHistoryView: React.FC = () => {
 
     setUpdatingSale(true);
     try {
-      const totalAmount = qtyNum * priceNum;
+      const totalAmount = Math.max(0, Math.round((rawSubtotal - discountNum) * 100) / 100);
       const finalPaid =
         editPayment === 'নগদ'
           ? totalAmount
           : editPayment === 'বাকি'
           ? 0
           : parseFloat(editPaidAmount) || 0;
-      const finalDue = Math.max(0, totalAmount - finalPaid);
+      const finalDue = Math.max(0, Math.round((totalAmount - finalPaid) * 100) / 100);
 
       await editSale(
         targetId,
@@ -246,6 +253,8 @@ export const SalesHistoryView: React.FC = () => {
           qty: qtyNum,
           unit: editUnit,
           price: priceNum,
+          subtotal: rawSubtotal,
+          discount: discountNum,
           total: totalAmount,
           date: editDate,
           payment: editPayment,
@@ -335,7 +344,12 @@ export const SalesHistoryView: React.FC = () => {
   };
 
   // Live total calculation for edit modal
-  const editTotalAmount = (parseFloat(editQty) || 0) * (parseFloat(editPrice) || 0);
+  const editSubtotalAmount = (parseFloat(editQty) || 0) * (parseFloat(editPrice) || 0);
+  const editDiscountNum = Math.min(
+    editSubtotalAmount,
+    Math.max(0, parseFloat(editDiscount) || 0)
+  );
+  const editTotalAmount = Math.max(0, Math.round((editSubtotalAmount - editDiscountNum) * 100) / 100);
 
   return (
     <div className="space-y-4 pb-4">
@@ -667,6 +681,11 @@ export const SalesHistoryView: React.FC = () => {
                       <div className="text-[10px] text-slate-400 font-normal">
                         @{formatCurrency(sale.price, language)}
                       </div>
+                      {Number(sale.discount || 0) > 0 && (
+                        <div className="text-[9px] text-amber-700 font-bold">
+                          -{formatCurrency(Number(sale.discount), language)} {language === 'bn' ? 'ছাড়' : 'disc'}
+                        </div>
+                      )}
                     </td>
                     <td className="py-2.5 px-2 text-center whitespace-nowrap">
                       <div className="flex flex-col items-center gap-0.5">
@@ -851,6 +870,23 @@ export const SalesHistoryView: React.FC = () => {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              {/* Discount input */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  {language === 'bn' ? 'ডিসকাউন্ট / ছাড় (৳)' : 'Discount (৳)'}
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  max={editSubtotalAmount || undefined}
+                  value={editDiscount}
+                  onChange={(e) => setEditDiscount(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 bg-amber-50/60 border border-amber-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
               </div>
 
               {/* Payment Type and Date */}

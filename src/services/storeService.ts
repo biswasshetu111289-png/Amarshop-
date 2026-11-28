@@ -716,6 +716,9 @@ export async function createSale(
     qty: number;
     unit: string;
     price: number;
+    subtotal?: number;
+    discount?: number;
+    discountPercent?: number;
     total: number;
     date: string;
     payment: 'নগদ' | 'বাকি' | 'আংশিক';
@@ -735,12 +738,19 @@ export async function createSale(
   // 1. New sale doc
   const salesRef = getSalesCollection(targetId);
   const newSaleDoc = doc(salesRef);
+  const computedSubtotal = Number(
+    saleData.subtotal ?? Number(saleData.price) * Number(saleData.qty)
+  );
+  const computedDiscount = Number(saleData.discount || 0);
   batch.set(newSaleDoc, {
     productId: saleData.productId,
     productName: saleData.productName,
     qty: Number(saleData.qty),
     unit: saleData.unit,
     price: Number(saleData.price),
+    subtotal: computedSubtotal,
+    discount: computedDiscount,
+    ...(saleData.discountPercent ? { discountPercent: Number(saleData.discountPercent) } : {}),
     total: Number(saleData.total),
     date: saleData.date,
     payment: saleData.payment,
@@ -779,6 +789,9 @@ export async function createMultiProductSale(
     qty: number;
     unit: string;
     price: number;
+    subtotal?: number;
+    discount?: number;
+    discountPercent?: number;
     total: number;
     date: string;
     payment: 'নগদ' | 'বাকি' | 'আংশিক';
@@ -803,12 +816,19 @@ export async function createMultiProductSale(
 
   for (const saleData of items) {
     const newSaleDoc = doc(salesRef);
+    const computedSubtotal = Number(
+      saleData.subtotal ?? Number(saleData.price) * Number(saleData.qty)
+    );
+    const computedDiscount = Number(saleData.discount || 0);
     const payload = {
       productId: saleData.productId,
       productName: saleData.productName,
       qty: Number(saleData.qty),
       unit: saleData.unit,
       price: Number(saleData.price),
+      subtotal: computedSubtotal,
+      discount: computedDiscount,
+      ...(saleData.discountPercent ? { discountPercent: Number(saleData.discountPercent) } : {}),
       total: Number(saleData.total),
       date: saleData.date,
       payment: saleData.payment,
@@ -858,6 +878,9 @@ export async function editSale(
     qty: number;
     unit: string;
     price: number;
+    subtotal?: number;
+    discount?: number;
+    discountPercent?: number;
     total: number;
     date: string;
     payment: 'নগদ' | 'বাকি' | 'আংশিক';
@@ -876,6 +899,11 @@ export async function editSale(
   const salesRef = getSalesCollection(targetId);
   const saleDocRef = doc(salesRef, saleId);
 
+  const computedSubtotal = Number(
+    updatedData.subtotal ?? Number(updatedData.price) * Number(updatedData.qty)
+  );
+  const computedDiscount = Number(updatedData.discount || 0);
+
   // 1. Update the sale record
   batch.update(saleDocRef, {
     productId: updatedData.productId,
@@ -883,6 +911,9 @@ export async function editSale(
     qty: Number(updatedData.qty),
     unit: updatedData.unit,
     price: Number(updatedData.price),
+    subtotal: computedSubtotal,
+    discount: computedDiscount,
+    discountPercent: Number(updatedData.discountPercent || 0),
     total: Number(updatedData.total),
     date: updatedData.date,
     payment: updatedData.payment,

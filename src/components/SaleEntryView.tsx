@@ -33,6 +33,8 @@ import {
   Receipt,
   ScanBarcode,
   Camera,
+  Tag,
+  Percent,
 } from 'lucide-react';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { normalizeBarcode, playScanBeep } from '../utils/barcode';
@@ -44,10 +46,28 @@ interface CartItem {
   unit: string;
   qty: number;
   price: number;
+  subtotal: number;
+  discountType: 'amount' | 'percent';
+  discountValue: number;
+  discount: number;
   total: number;
   packagingPrice: number;
   color: string;
   imageUrl?: string;
+}
+
+function computeDiscountAmount(
+  baseSubtotal: number,
+  type: 'amount' | 'percent',
+  rawValue: string | number
+): number {
+  const num = typeof rawValue === 'number' ? rawValue : parseFloat(String(rawValue || ''));
+  if (isNaN(num) || num <= 0 || baseSubtotal <= 0) return 0;
+  const rawDisc =
+    type === 'percent'
+      ? (baseSubtotal * Math.min(100, Math.max(0, num))) / 100
+      : num;
+  return Math.min(baseSubtotal, Math.round(rawDisc * 100) / 100);
 }
 
 export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
@@ -77,6 +97,13 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
   const [addressNotice, setAddressNotice] = useState<string | null>(null);
   const [barcodeScanInput, setBarcodeScanInput] = useState('');
   const [showPosScanner, setShowPosScanner] = useState(false);
+
+  // Discount State (Per-item & Overall Cart/Multi-item)
+  const [itemDiscountType, setItemDiscountType] = useState<'amount' | 'percent'>('amount');
+  const [itemDiscountValue, setItemDiscountValue] = useState<string>('');
+  const [orderDiscountType, setOrderDiscountType] = useState<'amount' | 'percent'>('amount');
+  const [orderDiscountValue, setOrderDiscountValue] = useState<string>('');
+  const [editingCartDiscountId, setEditingCartDiscountId] = useState<string | null>(null);
 
   // Address book compiled from all past sales & customer dues
   const customerAddressBook = React.useMemo(() => {
@@ -264,17 +291,46 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
     } else {
       setSaleColor('');
     }
+    setItemDiscountValue('');
+    setItemDiscountType('amount');
   }, [selectedProductId, currentProduct]);
 
-  // Live totals including any multi-product cart items + currently selected draft item
+  // Live totals including any multi-product cart items + currently selected draft item + discounts
   const currentDraftQty = parseFloat(qty) || 0;
   const currentDraftPrice = parseFloat(price) || 0;
-  const currentDraftTotal =
+  const currentDraftSubtotal =
     selectedProductId && currentProduct && currentDraftQty > 0
-      ? currentDraftQty * currentDraftPrice
+      ? Math.round(currentDraftQty * currentDraftPrice * 100) / 100
       : 0;
+  const currentDraftDiscount = computeDiscountAmount(
+    currentDraftSubtotal,
+    itemDiscountType,
+    itemDiscountValue
+  );
+  const currentDraftTotal = Math.max(
+    0,
+    Math.round((currentDraftSubtotal - currentDraftDiscount) * 100) / 100
+  );
+
+  const cartGrossSubtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const cartItemDiscountsTotal = cartItems.reduce((sum, item) => sum + item.discount, 0);
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.total, 0);
-  const totalAmount = cartSubtotal + currentDraftTotal;
+
+  const combinedGrossSubtotal =
+    Math.round((cartGrossSubtotal + currentDraftSubtotal) * 100) / 100;
+  const combinedAfterItemDiscounts =
+    Math.round((cartSubtotal + currentDraftTotal) * 100) / 100;
+  const orderDiscountAmount = computeDiscountAmount(
+    combinedAfterItemDiscounts,
+    orderDiscountType,
+    orderDiscountValue
+  );
+  const totalDiscountAmount =
+    Math.round((cartItemDiscountsTotal + currentDraftDiscount + orderDiscountAmount) * 100) / 100;
+  const totalAmount = Math.max(
+    0,
+    Math.round((combinedAfterItemDiscounts - orderDiscountAmount) * 100) / 100
+  );
 
   const getUsedQtyInCart = (productId: string) =>
     cartItems
@@ -338,10 +394,18 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         if (updatedQty > matched.qty) {
           return prev;
         }
+        const updatedSubtotal = Math.round(updatedQty * unitPrice * 100) / 100;
+        const updatedDiscount = computeDiscountAmount(
+          updatedSubtotal,
+          next[existingIdx].discountType,
+          next[existingIdx].discountValue
+        );
         next[existingIdx] = {
           ...next[existingIdx],
           qty: updatedQty,
-          total: updatedQty * unitPrice,
+          subtotal: updatedSubtotal,
+          discount: updatedDiscount,
+          total: Math.max(0, Math.round((updatedSubtotal - updatedDiscount) * 100) / 100),
         };
         return next;
       }
@@ -354,7 +418,11 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           unit: matched.unit,
           qty: addQty,
           price: unitPrice,
-          total: addQty * unitPrice,
+          subtotal: Math.round(addQty * unitPrice * 100) / 100,
+          discountType: 'amount',
+          discountValue: 0,
+          discount: 0,
+          total: Math.round(addQty * unitPrice * 100) / 100,
           packagingPrice: matched.packagingPrice || 0,
           color: defaultColor,
           imageUrl: matched.imageUrl || '',
@@ -423,22 +491,35 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
     }
 
     const chosenColor = saleColor.trim() || currentProduct.color || '';
-    const lineTotal = saleQty * salePrice;
+    const lineSubtotal = Math.round(saleQty * salePrice * 100) / 100;
+    const rawDiscVal = parseFloat(itemDiscountValue) || 0;
+    const lineDiscount = computeDiscountAmount(lineSubtotal, itemDiscountType, rawDiscVal);
+    const lineTotal = Math.max(0, Math.round((lineSubtotal - lineDiscount) * 100) / 100);
 
     setCartItems((prev) => {
       const existingIdx = prev.findIndex(
         (item) =>
           item.productId === currentProduct.id &&
           item.price === salePrice &&
-          item.color === chosenColor
+          item.color === chosenColor &&
+          item.discountType === itemDiscountType &&
+          item.discountValue === rawDiscVal
       );
       if (existingIdx >= 0) {
         const next = [...prev];
         const updatedQty = next[existingIdx].qty + saleQty;
+        const updatedSubtotal = Math.round(updatedQty * salePrice * 100) / 100;
+        const updatedDiscount = computeDiscountAmount(
+          updatedSubtotal,
+          next[existingIdx].discountType,
+          next[existingIdx].discountValue
+        );
         next[existingIdx] = {
           ...next[existingIdx],
           qty: updatedQty,
-          total: updatedQty * salePrice,
+          subtotal: updatedSubtotal,
+          discount: updatedDiscount,
+          total: Math.max(0, Math.round((updatedSubtotal - updatedDiscount) * 100) / 100),
         };
         return next;
       }
@@ -451,6 +532,10 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           unit: currentProduct.unit,
           qty: saleQty,
           price: salePrice,
+          subtotal: lineSubtotal,
+          discountType: itemDiscountType,
+          discountValue: rawDiscVal,
+          discount: lineDiscount,
           total: lineTotal,
           packagingPrice: currentProduct.packagingPrice || 0,
           color: chosenColor,
@@ -470,10 +555,34 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
     setQty('1');
     setPrice('');
     setSaleColor('');
+    setItemDiscountValue('');
+    setItemDiscountType('amount');
+  };
+
+  const handleUpdateCartItemDiscount = (
+    tempId: string,
+    discountType: 'amount' | 'percent',
+    rawValStr: string
+  ) => {
+    const val = parseFloat(rawValStr) || 0;
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.tempId !== tempId) return item;
+        const disc = computeDiscountAmount(item.subtotal, discountType, val);
+        return {
+          ...item,
+          discountType,
+          discountValue: val,
+          discount: disc,
+          total: Math.max(0, Math.round((item.subtotal - disc) * 100) / 100),
+        };
+      })
+    );
   };
 
   const handleRemoveFromCart = (tempId: string) => {
     setCartItems((prev) => prev.filter((item) => item.tempId !== tempId));
+    if (editingCartDiscountId === tempId) setEditingCartDiscountId(null);
   };
 
   const handleSubmitSale = async (e: React.FormEvent) => {
@@ -512,6 +621,10 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         return;
       }
 
+      const draftSubtotal = Math.round(saleQty * salePrice * 100) / 100;
+      const draftDiscVal = parseFloat(itemDiscountValue) || 0;
+      const draftDiscount = computeDiscountAmount(draftSubtotal, itemDiscountType, draftDiscVal);
+
       itemsToSubmit.push({
         tempId: 'current',
         productId: currentProduct.id,
@@ -519,7 +632,11 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
         unit: currentProduct.unit,
         qty: saleQty,
         price: salePrice,
-        total: saleQty * salePrice,
+        subtotal: draftSubtotal,
+        discountType: itemDiscountType,
+        discountValue: draftDiscVal,
+        discount: draftDiscount,
+        total: Math.max(0, Math.round((draftSubtotal - draftDiscount) * 100) / 100),
         packagingPrice: currentProduct.packagingPrice || 0,
         color: saleColor.trim() || currentProduct.color || '',
         imageUrl: currentProduct.imageUrl || '',
@@ -534,7 +651,57 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
       return;
     }
 
-    const grandTotal = itemsToSubmit.reduce((sum, item) => sum + item.total, 0);
+    // Apply proportional cart/order-level discount across items so each Sale record's subtotal - discount === total
+    const sumAfterItemDiscounts = itemsToSubmit.reduce((sum, item) => sum + item.total, 0);
+    const appliedOrderDiscount = computeDiscountAmount(
+      sumAfterItemDiscounts,
+      orderDiscountType,
+      orderDiscountValue
+    );
+
+    const lastPositiveIdx = itemsToSubmit.reduce(
+      (last, item, idx) => (item.total > 0 ? idx : last),
+      -1
+    );
+    let allocatedOrderDiscount = 0;
+
+    const finalizedItems = itemsToSubmit.map((item, idx) => {
+      let itemOrderShare = 0;
+      if (appliedOrderDiscount > 0 && sumAfterItemDiscounts > 0 && item.total > 0) {
+        if (idx === lastPositiveIdx) {
+          itemOrderShare = Math.max(
+            0,
+            Math.round((appliedOrderDiscount - allocatedOrderDiscount) * 100) / 100
+          );
+        } else {
+          itemOrderShare =
+            Math.round(((appliedOrderDiscount * item.total) / sumAfterItemDiscounts) * 100) / 100;
+          allocatedOrderDiscount += itemOrderShare;
+        }
+      }
+      const combinedItemDiscount = Math.min(
+        item.subtotal,
+        Math.round((item.discount + itemOrderShare) * 100) / 100
+      );
+      const netLineTotal = Math.max(
+        0,
+        Math.round((item.subtotal - combinedItemDiscount) * 100) / 100
+      );
+      const effectivePct =
+        item.subtotal > 0 && combinedItemDiscount > 0
+          ? Math.round(((combinedItemDiscount / item.subtotal) * 100) * 10) / 10
+          : 0;
+
+      return {
+        ...item,
+        finalDiscount: combinedItemDiscount,
+        finalDiscountPercent: effectivePct,
+        finalTotal: netLineTotal,
+      };
+    });
+
+    const grandTotal =
+      Math.round(finalizedItems.reduce((sum, item) => sum + item.finalTotal, 0) * 100) / 100;
 
     if (payment === 'বাকি' && !customer.trim()) {
       showToast(
@@ -586,23 +753,23 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
 
       // Distribute paid/due sequentially across items so total paid + due match invoice exact sum
       let remainingCash = finalPaidAmount;
-      const preparedSalesPayload = itemsToSubmit.map((item) => {
+      const preparedSalesPayload = finalizedItems.map((item) => {
         let itemPaid = 0;
-        let itemDue = item.total;
+        let itemDue = item.finalTotal;
         let itemPaymentStatus: PaymentType = payment;
 
         if (payment === 'নগদ') {
-          itemPaid = item.total;
+          itemPaid = item.finalTotal;
           itemDue = 0;
           itemPaymentStatus = 'নগদ';
         } else if (payment === 'বাকি') {
           itemPaid = 0;
-          itemDue = item.total;
+          itemDue = item.finalTotal;
           itemPaymentStatus = 'বাকি';
         } else {
-          itemPaid = Math.min(item.total, Math.max(0, remainingCash));
+          itemPaid = Math.min(item.finalTotal, Math.max(0, remainingCash));
           remainingCash = Math.max(0, remainingCash - itemPaid);
-          itemDue = Math.max(0, item.total - itemPaid);
+          itemDue = Math.max(0, Math.round((item.finalTotal - itemPaid) * 100) / 100);
           itemPaymentStatus =
             itemDue <= 0 ? 'নগদ' : itemPaid > 0 ? 'আংশিক' : 'বাকি';
         }
@@ -613,7 +780,10 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           qty: item.qty,
           unit: item.unit,
           price: item.price,
-          total: item.total,
+          subtotal: item.subtotal,
+          discount: item.finalDiscount,
+          discountPercent: item.finalDiscountPercent,
+          total: item.finalTotal,
           date,
           payment: itemPaymentStatus,
           paymentMethod:
@@ -652,6 +822,11 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
       setQty('1');
       setPrice('');
       setSaleColor('');
+      setItemDiscountValue('');
+      setItemDiscountType('amount');
+      setOrderDiscountValue('');
+      setOrderDiscountType('amount');
+      setEditingCartDiscountId(null);
       setCustomer('');
       setCustomerPhone('');
       setPayment('নগদ');
@@ -1050,6 +1225,99 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             </div>
           </div>
 
+          {/* Per-Product Discount (নির্দিষ্ট পণ্যের ডিসকাউন্ট - ঐচ্ছিক) */}
+          {selectedProductId && currentProduct && (
+            <div className="p-2.5 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <label className="font-bold text-amber-950 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-amber-600" />
+                  <span>
+                    {language === 'bn'
+                      ? 'এই পণ্যে ডিসকাউন্ট / ছাড় (ঐচ্ছিক)'
+                      : 'Product Discount (Optional)'}
+                  </span>
+                </label>
+                {currentDraftDiscount > 0 && (
+                  <span className="text-[11px] font-bold text-emerald-700">
+                    {language === 'bn' ? 'নেট:' : 'Net:'} {formatCurrency(currentDraftTotal, language)}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex bg-white border border-amber-200 rounded-lg p-0.5 text-[11px] font-bold shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setItemDiscountType('amount')}
+                    className={`px-2.5 py-1 rounded-md transition ${
+                      itemDiscountType === 'amount'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-amber-50'
+                    }`}
+                  >
+                    ৳ টাকা
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setItemDiscountType('percent')}
+                    className={`px-2.5 py-1 rounded-md transition flex items-center gap-0.5 ${
+                      itemDiscountType === 'percent'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-amber-50'
+                    }`}
+                  >
+                    <Percent className="w-3 h-3" />
+                    <span>%</span>
+                  </button>
+                </div>
+
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  max={itemDiscountType === 'percent' ? 100 : currentDraftSubtotal || undefined}
+                  value={itemDiscountValue}
+                  onChange={(e) => setItemDiscountValue(e.target.value)}
+                  placeholder={
+                    itemDiscountType === 'percent'
+                      ? language === 'bn'
+                        ? 'শতকরা হার (যেমন: ১০)'
+                        : 'Discount % (e.g. 10)'
+                      : language === 'bn'
+                      ? 'ছাড়ের টাকা (যেমন: ৫০)'
+                      : 'Discount amount (৳)'
+                  }
+                  className="flex-1 px-3 py-1.5 bg-white border border-amber-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                {itemDiscountValue && (
+                  <button
+                    type="button"
+                    onClick={() => setItemDiscountValue('')}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 bg-white border border-slate-200 rounded-lg"
+                    title={language === 'bn' ? 'ডিসকাউন্ট মুছুন' : 'Clear discount'}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {currentDraftDiscount > 0 && (
+                <div className="flex items-center justify-between text-[11px] text-amber-900 pt-0.5">
+                  <span>
+                    {language === 'bn' ? 'আসল মূল্য:' : 'Gross:'}{' '}
+                    <span className="line-through opacity-75">
+                      {formatCurrency(currentDraftSubtotal, language)}
+                    </span>
+                  </span>
+                  <span className="font-bold text-rose-700">
+                    {language === 'bn' ? 'ডিসকাউন্ট:' : 'Discount:'} -
+                    {formatCurrency(currentDraftDiscount, language)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Multi-Product Add to Cart Trigger */}
           {canManage && (
             <div className="flex items-center justify-between gap-2">
@@ -1069,7 +1337,7 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
             </div>
           )}
 
-          {/* Multi-Product Cart Preview List */}
+          {/* Multi-Product Cart Preview List (with inline per-item discount edit) */}
           {cartItems.length > 0 && (
             <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-2">
               <div className="flex items-center justify-between">
@@ -1087,44 +1355,224 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
               </div>
 
               <div className="divide-y divide-indigo-100 bg-white rounded-xl border border-indigo-100 overflow-hidden">
-                {cartItems.map((item, idx) => (
-                  <div
-                    key={item.tempId}
-                    className="px-3 py-2 flex items-center justify-between gap-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {item.imageUrl && (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.productName}
-                          className="w-8 h-8 rounded-lg object-cover border border-indigo-100 shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-900 truncate">
-                          {language === 'bn' ? toBengaliNumber(idx + 1) : idx + 1}. {item.productName}
-                          {item.color ? ` (${item.color})` : ''}
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          {formatQty(item.qty, item.unit, language)} × {formatCurrency(item.price, language)}
-                        </p>
+                {cartItems.map((item, idx) => {
+                  const isEditingDisc = editingCartDiscountId === item.tempId;
+                  return (
+                    <div key={item.tempId} className="px-3 py-2 space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {item.imageUrl && (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.productName}
+                              className="w-8 h-8 rounded-lg object-cover border border-indigo-100 shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 truncate">
+                              {language === 'bn' ? toBengaliNumber(idx + 1) : idx + 1}. {item.productName}
+                              {item.color ? ` (${item.color})` : ''}
+                            </p>
+                            <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
+                              <span>
+                                {formatQty(item.qty, item.unit, language)} × {formatCurrency(item.price, language)}
+                              </span>
+                              {item.discount > 0 && (
+                                <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">
+                                  -{formatCurrency(item.discount, language)} ছাড়
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="text-right">
+                            {item.discount > 0 && (
+                              <div className="text-[10px] text-slate-400 line-through">
+                                {formatCurrency(item.subtotal, language)}
+                              </div>
+                            )}
+                            <span className="font-extrabold text-slate-900">
+                              {formatCurrency(item.total, language)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingCartDiscountId(isEditingDisc ? null : item.tempId)
+                            }
+                            className={`px-1.5 py-1 rounded-lg text-[10px] font-bold border transition ${
+                              item.discount > 0 || isEditingDisc
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700'
+                            }`}
+                            title={language === 'bn' ? 'এই পণ্যে ডিসকাউন্ট দিন' : 'Item discount'}
+                          >
+                            {language === 'bn' ? 'ছাড়' : 'Disc'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFromCart(item.tempId)}
+                            className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                            title={language === 'bn' ? 'বাদ দিন' : 'Remove'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
+
+                      {isEditingDisc && (
+                        <div className="p-2 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center gap-1.5">
+                          <div className="flex bg-white border border-amber-200 rounded-lg p-0.5 text-[10px] font-bold shrink-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateCartItemDiscount(
+                                  item.tempId,
+                                  'amount',
+                                  String(item.discountValue || '')
+                                )
+                              }
+                              className={`px-2 py-0.5 rounded ${
+                                item.discountType === 'amount'
+                                  ? 'bg-amber-600 text-white'
+                                  : 'text-slate-600'
+                              }`}
+                            >
+                              ৳
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateCartItemDiscount(
+                                  item.tempId,
+                                  'percent',
+                                  String(item.discountValue || '')
+                                )
+                              }
+                              className={`px-2 py-0.5 rounded ${
+                                item.discountType === 'percent'
+                                  ? 'bg-amber-600 text-white'
+                                  : 'text-slate-600'
+                              }`}
+                            >
+                              %
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            max={item.discountType === 'percent' ? 100 : item.subtotal}
+                            value={item.discountValue || ''}
+                            onChange={(e) =>
+                              handleUpdateCartItemDiscount(
+                                item.tempId,
+                                item.discountType,
+                                e.target.value
+                              )
+                            }
+                            placeholder={
+                              item.discountType === 'percent' ? 'ছাড় (%)' : 'ছাড় (৳)'
+                            }
+                            className="flex-1 px-2.5 py-1 bg-white border border-amber-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditingCartDiscountId(null)}
+                            className="px-2 py-1 bg-amber-600 text-white rounded-lg text-[10px] font-bold"
+                          >
+                            {language === 'bn' ? 'ঠিক আছে' : 'Done'}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-extrabold text-slate-900">
-                        {formatCurrency(item.total, language)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFromCart(item.tempId)}
-                        className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition"
-                        title={language === 'bn' ? 'বাদ দিন' : 'Remove'}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Overall / Multi-Product Cart Discount Box */}
+          {(cartItems.length > 0 || (selectedProductId && currentProduct)) && (
+            <div className="p-3 bg-gradient-to-r from-amber-50/80 to-orange-50/70 border border-amber-200 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <label className="font-bold text-amber-950 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-amber-700" />
+                  <span>
+                    {cartItems.length > 0
+                      ? language === 'bn'
+                        ? 'সর্বমোট বিলের ওপর ডিসকাউন্ট (একাধিক পণ্যে)'
+                        : 'Overall Invoice Discount (Multi-Product)'
+                      : language === 'bn'
+                      ? 'মোট বিলের ওপর অতিরিক্ত ডিসকাউন্ট (ঐচ্ছিক)'
+                      : 'Overall Invoice Discount (Optional)'}
+                  </span>
+                </label>
+                {orderDiscountAmount > 0 && (
+                  <span className="text-[11px] font-bold text-rose-700">
+                    -{formatCurrency(orderDiscountAmount, language)}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex bg-white border border-amber-300 rounded-xl p-0.5 text-[11px] font-bold shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setOrderDiscountType('amount')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      orderDiscountType === 'amount'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-amber-50'
+                    }`}
+                  >
+                    ৳ টাকা
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrderDiscountType('percent')}
+                    className={`px-2.5 py-1 rounded-lg transition flex items-center gap-0.5 ${
+                      orderDiscountType === 'percent'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-amber-50'
+                    }`}
+                  >
+                    <Percent className="w-3 h-3" />
+                    <span>%</span>
+                  </button>
+                </div>
+
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  max={orderDiscountType === 'percent' ? 100 : combinedAfterItemDiscounts || undefined}
+                  value={orderDiscountValue}
+                  onChange={(e) => setOrderDiscountValue(e.target.value)}
+                  placeholder={
+                    orderDiscountType === 'percent'
+                      ? language === 'bn'
+                        ? 'পুরো বিলে শতকরা ছাড় (%)'
+                        : 'Invoice discount %'
+                      : language === 'bn'
+                      ? 'পুরো বিলে মোট ছাড় (৳)'
+                      : 'Invoice discount (৳)'
+                  }
+                  className="flex-1 px-3 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+
+                {orderDiscountValue && (
+                  <button
+                    type="button"
+                    onClick={() => setOrderDiscountValue('')}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 bg-white border border-slate-200 rounded-xl"
+                    title={language === 'bn' ? 'মুছুন' : 'Clear'}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1431,19 +1879,29 @@ export const SaleEntryView: React.FC<{ onSuccessNavigate?: () => void }> = ({
           </div>
 
           {/* Live Total Calculation Card */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md flex items-center justify-between">
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md flex items-center justify-between gap-2">
             <div>
               <span className="text-[11px] text-blue-200 block">
-                {language === 'bn' ? 'মোট বিক্রয় মূল্য' : 'Total Sale Amount'}
+                {language === 'bn' ? 'চূড়ান্ত বিক্রয় মূল্য (ডিসকাউন্ট বাদে)' : 'Net Total Sale Amount'}
                 {cartItems.length > 0 &&
                   ` (${toBengaliNumber(cartItems.length + (selectedProductId && currentDraftQty > 0 ? 1 : 0))} টি আইটেম)`}
               </span>
               <span className="text-xl font-black tracking-tight block mt-0.5">
                 {formatCurrency(totalAmount, language)}
               </span>
+              {totalDiscountAmount > 0 && (
+                <span className="text-[11px] text-amber-300 font-semibold block mt-0.5">
+                  {language === 'bn' ? 'মোট আসল:' : 'Subtotal:'}{' '}
+                  <span className="line-through opacity-80">
+                    {formatCurrency(combinedGrossSubtotal, language)}
+                  </span>{' '}
+                  • {language === 'bn' ? 'মোট ছাড়:' : 'Saved:'} -
+                  {formatCurrency(totalDiscountAmount, language)}
+                </span>
+              )}
             </div>
 
-            <div className="text-right text-[11px] text-slate-300">
+            <div className="text-right text-[11px] text-slate-300 shrink-0">
               {selectedProductId && currentProduct ? (
                 <>
                   <div>

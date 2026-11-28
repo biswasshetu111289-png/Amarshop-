@@ -591,6 +591,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             qty: Number(data.qty) || 0,
             unit: data.unit || 'পিস',
             price: Number(data.price) || 0,
+            subtotal:
+              data.subtotal !== undefined
+                ? Number(data.subtotal)
+                : Number(data.price || 0) * Number(data.qty || 0),
+            discount: data.discount !== undefined ? Number(data.discount) : 0,
+            ...(data.discountPercent !== undefined
+              ? { discountPercent: Number(data.discountPercent) }
+              : {}),
             total: Number(data.total) || 0,
             date: data.date || '',
             payment: resolvedPayment,
@@ -603,6 +611,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             packagingPrice: data.packagingPrice ? Number(data.packagingPrice) : 0,
             color: data.color || '',
             notes: data.notes || '',
+            ...(data.invoiceGroupId ? { invoiceGroupId: data.invoiceGroupId } : {}),
             collectionDate: data.collectionDate || '',
             collectionNotes: data.collectionNotes || '',
             createdAt: data.createdAt,
@@ -866,7 +875,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else if (s.productName && productBuyPriceMap.has(s.productName.trim().toLowerCase())) {
         totalCostPerUnit = productBuyPriceMap.get(s.productName.trim().toLowerCase())!;
       }
-      const itemProfit = (s.price - totalCostPerUnit) * s.qty;
+      const itemProfit = Number(s.total || 0) - totalCostPerUnit * Number(s.qty || 0);
       profit += itemProfit;
     }
     return profit;
